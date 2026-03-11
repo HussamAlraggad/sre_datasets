@@ -1,0 +1,22 @@
+# Dataset — too large to commit
+all_reviews.csv
+
+# Python virtual environment
+code_base/.venv/
+
+# ChromaDB vector store (built locally by ingest.py)
+code_base/chroma_db/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
