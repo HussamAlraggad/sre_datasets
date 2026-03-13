@@ -24,7 +24,7 @@
 
 ## 1. System Requirements
 
-| Component | Required | Your Setup |
+| Component | Required | My Setup |
 |---|---|---|
 | Python | 3.10+ | 3.13.7 |
 | CUDA | 11.7+ | 13.0 |
