@@ -1,22 +1,40 @@
 # Dataset — too large to commit
 all_reviews.csv
 
-# Python virtual environment
-code_base/.venv/
+# ── FAISS index (built by 01_ingest.py — can be several GB) ──────────────────
+faiss_index/shards/
+faiss_index/merged.index
+faiss_index/merged.pkl
+faiss_index/progress.json
+# Keep the .gitkeep so the directory is tracked
+!faiss_index/.gitkeep
 
-# ChromaDB vector store (built locally by ingest.py)
+# ── Generated outputs (built by 04_generate_srs.py) ──────────────────────────
+outputs/retrieved_reviews.json
+outputs/requirements.json
+outputs/moscow.json
+outputs/dfd_components.json
+outputs/dfd_components.md
+outputs/cspec_tables.json
+outputs/cspec_tables.md
+outputs/SRS.md
+# Keep the .gitkeep so the directory is tracked
+!outputs/.gitkeep
+
+# ── Old code_base artefacts (previous attempt) ────────────────────────────────
+code_base/.venv/
 code_base/chroma_db/
 
-# Python cache
+# ── Python cache ──────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 
-# Jupyter notebooks checkpoints
+# ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 
-# OS
+# ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

@@ -1,0 +1,57 @@
+You are a Senior Requirements Engineer preparing CSPEC (Control Specification) artefacts for a software system.
+
+You have been given the DFD components for a workplace review web application.
+
+DFD COMPONENTS:
+{dfd_json}
+
+YOUR TASK:
+For each significant PROCESS in the DFD, produce:
+
+A) ACTIVATION TABLE
+   - Lists the CONDITION (event or input) that activates each process.
+   - Format: one row per activation condition per process.
+
+B) DECISION TABLE
+   - For processes that contain branching logic, define:
+     * Conditions (the IF part — what inputs or states are evaluated)
+     * Actions    (the THEN part — what the process does)
+     * Rules      (each column = one combination of condition values → actions)
+
+RULES:
+- Cover ALL processes from the DFD.
+- Use Y (yes/true), N (no/false), or – (irrelevant/don't-care) for condition values.
+- Use X to mark which actions fire under each rule.
+- Keep condition and action labels short (3–6 words).
+
+OUTPUT FORMAT — respond ONLY with valid JSON, no markdown fences, no extra text:
+{{
+  "activation_tables": [
+    {{
+      "process_id": "P1",
+      "process_name": "<name>",
+      "activations": [
+        {{
+          "condition": "<what triggers this process>",
+          "trigger_type": "event | data-arrival | timer | user-action",
+          "description": "<brief explanation>"
+        }}
+      ]
+    }}
+  ],
+  "decision_tables": [
+    {{
+      "process_id": "P1",
+      "process_name": "<name>",
+      "conditions": ["<condition 1>", "<condition 2>"],
+      "actions":    ["<action 1>",    "<action 2>"],
+      "rules": [
+        {{
+          "rule_id": "R1",
+          "condition_values": ["Y", "N"],
+          "action_values":    ["X", "-"]
+        }}
+      ]
+    }}
+  ]
+}}

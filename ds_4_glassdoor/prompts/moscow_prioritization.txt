@@ -1,0 +1,44 @@
+You are a Senior Requirements Engineer applying the MoSCoW prioritization method.
+
+You have been given a list of software requirements extracted from Glassdoor user reviews.
+
+REQUIREMENTS LIST:
+{requirements_json}
+
+CONTEXT — the system being built:
+A workplace review and rating web application (similar to Glassdoor) designed to help employees share experiences and help job-seekers make informed decisions.
+
+MoSCoW DEFINITIONS:
+- MUST   have: Critical. Without this, the system fails its core purpose. Non-negotiable for v1.0.
+- SHOULD have: Important but not vital. High value, can be deferred if needed.
+- COULD  have: Nice to have. Low impact if omitted. Implement if time/budget allows.
+- WON'T  have: Explicitly out of scope for this version. May be revisited in future.
+
+PRIORITIZATION CRITERIA (weigh all four):
+1. Frequency   — How often was this theme mentioned across the reviews?
+2. Impact       — How much does this affect user satisfaction or system usefulness?
+3. Risk         — Does omitting this cause legal, security, or trust issues?
+4. Feasibility  — Can this realistically be built in a student/MVP context?
+
+INSTRUCTIONS:
+- Assign every requirement exactly one MoSCoW category.
+- Add a short justification (1–2 sentences) explaining the priority decision.
+- Preserve the original requirement ID and statement unchanged.
+
+OUTPUT FORMAT — respond ONLY with valid JSON, no markdown fences, no extra text:
+{{
+  "moscow_prioritization": [
+    {{
+      "id": "<original ID, e.g. FR-001>",
+      "statement": "<original statement unchanged>",
+      "moscow": "MUST | SHOULD | COULD | WON'T",
+      "justification": "<why this priority>"
+    }}
+  ],
+  "summary": {{
+    "must_count":   0,
+    "should_count": 0,
+    "could_count":  0,
+    "wont_count":   0
+  }}
+}}
