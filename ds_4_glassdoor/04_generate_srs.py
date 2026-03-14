@@ -234,7 +234,97 @@ def _patch_srs(srs_text: str, requirements: dict, moscow: dict, dfd: dict) -> st
 
     srs_text = "\n".join(lines)
 
-    # ── 4. Append Traceability Matrix if missing ──────────────────────────────
+    # ── 4. Replace Section 3 with a deterministic render from JSON ────────────
+    # Build MoSCoW lookup: id → {moscow, justification}
+    _moscow_detail: dict = {}
+    for item in moscow.get("moscow_prioritization", []):
+        _moscow_detail[item["id"]] = {
+            "moscow":        item.get("moscow", "—"),
+            "justification": item.get("justification", ""),
+        }
+
+    # Build Section 3 text
+    sec3_lines = [
+        "## 3. Specific Requirements",
+        "### 3.1 Functional Requirements",
+    ]
+    for req in requirements.get("functional_requirements", []):
+        rid  = req["id"]
+        cat  = req.get("category", rid)
+        stmt = req.get("statement", "")
+        src  = req.get("source", "")
+        rat  = req.get("rationale", "")
+        mos  = _moscow_detail.get(rid, {})
+        prio = mos.get("moscow", "—")
+        just = mos.get("justification", "")
+        sec3_lines += [
+            f"#### {rid}: {cat}",
+            stmt,
+            "",
+            f"* MoSCoW Priority: {prio}",
+            f"* Justification: {just}",
+            f"* Source: {src}",
+            f"* Rationale: {rat}",
+            "",
+        ]
+
+    sec3_lines.append("### 3.2 Non-Functional Requirements")
+    for req in requirements.get("non_functional_requirements", []):
+        rid  = req["id"]
+        cat  = req.get("category", rid)
+        stmt = req.get("statement", "")
+        src  = req.get("source", "")
+        rat  = req.get("rationale", "")
+        mos  = _moscow_detail.get(rid, {})
+        prio = mos.get("moscow", "—")
+        just = mos.get("justification", "")
+        sec3_lines += [
+            f"#### {rid}: {cat}",
+            stmt,
+            "",
+            f"* MoSCoW Priority: {prio}",
+            f"* Justification: {just}",
+            f"* Source: {src}",
+            f"* Rationale: {rat}",
+            "",
+        ]
+
+    new_section_3 = "\n".join(sec3_lines)
+
+    # Strip whatever Section 3 the LLM wrote and replace with ours
+    srs_text = re.sub(
+        r"## 3\. Specific Requirements.*?(## 4\.)",
+        new_section_3 + "\n\n" + r"\1",
+        srs_text,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+    # ── 5. Replace Section 5.1 MoSCoW Summary Table deterministically ───────────
+    _moscow_summary_rows = []
+    for req in requirements.get("functional_requirements", []) + requirements.get("non_functional_requirements", []):
+        rid  = req["id"]
+        stmt = req.get("statement", "")
+        mos  = _moscow_detail.get(rid, {})
+        prio = mos.get("moscow", "—")
+        just = mos.get("justification", "")
+        _moscow_summary_rows.append(f"| {rid} | {stmt} | {prio} | {just} |")
+
+    new_51 = (
+        "### 5.1 MoSCoW Summary Table\n\n"
+        "| ID | Statement | MoSCoW Priority | Justification |\n"
+        "|---|---|---|---|\n"
+    ) + "\n".join(_moscow_summary_rows)
+
+    srs_text = re.sub(
+        r"### 5\.1 MoSCoW Summary Table.*?(### 5\.2)",
+        new_51 + "\n\n" + r"\1",
+        srs_text,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+    # ── 6. Append Traceability Matrix if missing ──────────────────────────────
     has_traceability = bool(re.search(r"###\s+5\.2\s+Traceability", srs_text, re.IGNORECASE))
     if not has_traceability:
         # Build a lookup: id → moscow priority
