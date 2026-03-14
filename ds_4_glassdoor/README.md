@@ -154,10 +154,13 @@ python 01_ingest.py
 |---|---|
 | Embedding model | `all-MiniLM-L6-v2` (default) |
 | Chunk size | 50 000 rows per shard |
-| Total shards | ~340 |
+| Total shards | ~339 |
 | Time per shard | ~20–60 seconds (GPU) |
 | **Total time** | **2–6 hours** |
 | Disk usage | ~7–20 GB (all shards + merged index) |
+
+> **Current status (2026-03-14):** 199/339 shards complete — 9,901,718 / 16,935,367 rows embedded (58.5%).
+> The merged index exists and retrieval works. Run `python 01_ingest.py` to resume and complete the remaining 140 shards.
 
 Progress is saved to `faiss_index/progress.json` after every shard.
 **If the process is interrupted, just re-run the same command** — it will
@@ -322,11 +325,19 @@ python 01_ingest.py   # resumes automatically
 ollama serve   # start Ollama in another terminal
 ```
 
-### LLM returns empty or malformed JSON
-This is normal for small models on complex prompts. The system logs a warning
-and stores `{"error": "...", "raw_output": "..."}` in the JSON file.
-**Fix:** lower `LLM_TEMPERATURE` to `0.0` in `config.py`, or try
-`--skip-retrieval` to re-run chains without the retrieval step.
+### LLM wraps JSON in conversational preamble (e.g. "Here is the output: {...}")
+This was the actual failure mode encountered on the first run (2026-03-14).
+`llama3:8b` prefixes its JSON response with a natural-language sentence like
+`"Here is the extracted requirements in JSON format:"`, which caused
+`json.loads()` to fail immediately.
+
+**This is now fixed in `03_chains.py`** — `_safe_json()` finds the first `{`
+or `[` in the response and slices off any preamble before parsing. No action
+needed; re-running `04_generate_srs.py` will produce correct output.
+
+If you still see `{"error": ..., "raw_output": ...}` in a JSON file after the
+fix, inspect the `raw_output` field to diagnose the new failure mode, then
+lower `LLM_TEMPERATURE` to `0.0` in `config.py` and re-run.
 
 ### Ingest interrupted mid-shard
 Just re-run `python 01_ingest.py`. The completed shards are saved and the
@@ -345,6 +356,8 @@ python 01_ingest.py --merge-only
 |---|---|---|
 | 2026-03-13 | v1.0 | Initial project build. All five pipeline stages implemented. |
 | 2026-03-13 | v1.1 | Dependencies installed (`--break-system-packages`). `llama3:8b` pulled. GPU + Ollama smoke tests passed. Ready for Stage 1 ingest. |
+| 2026-03-14 | v1.2 | Stage 1 partial ingestion run: 199/339 shards completed (9,901,718 rows, 58.5%). Merged index built. Stage 3 first run: all 5 chains executed but chains 1–4 produced `{"error": ...}` JSON due to LLM wrapping output in natural-language preamble. `dfd_components.md` and `cspec_tables.md` empty as a result. `SRS.md` truncated mid-table (hit `LLM_NUM_PREDICT = 2048` token limit). |
+| 2026-03-14 | v1.3 | Fixed `_safe_json()` in `03_chains.py` to strip natural-language preamble before JSON parsing. Raised `LLM_NUM_PREDICT` from 2048 → 8192 in `config.py` to fix SRS truncation. Re-run `04_generate_srs.py --skip-retrieval` to regenerate all outputs. |
 
 ---
 

@@ -66,7 +66,7 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 # Generation parameters
 LLM_TEMPERATURE  = 0.1   # Low temp → deterministic, structured output
 LLM_NUM_CTX      = 4096  # Context window (tokens); llama3:8b supports up to 8192
-LLM_NUM_PREDICT  = 2048  # Max tokens to generate per chain call
+LLM_NUM_PREDICT  = 8192  # Max tokens to generate per chain call
 
 # ─────────────────────────────────────────────
 # Retrieval

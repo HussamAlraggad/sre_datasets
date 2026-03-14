@@ -287,6 +287,7 @@ def _load_module(name: str, file_path: Path):
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load module from {file_path}")
     mod = types.ModuleType(name)
+    mod.__file__ = str(file_path)
     spec.loader.exec_module(mod)
     return mod
 

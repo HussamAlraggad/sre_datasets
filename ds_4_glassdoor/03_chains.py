@@ -106,6 +106,12 @@ def _safe_json(raw: str, chain_name: str) -> dict:
         # drop first line (```json or ```) and last line (```)
         text = "\n".join(lines[1:-1]).strip()
 
+    first_brace = min(
+        (text.find("{") if text.find("{") != -1 else len(text)),
+        (text.find("[") if text.find("[") != -1 else len(text)),
+    )
+    text = text[first_brace:]
+
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:

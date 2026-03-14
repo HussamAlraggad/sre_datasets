@@ -115,7 +115,7 @@ neighbour search in dense vector spaces.
 
 | Property | Value for this project |
 |---|---|
-| Index size | ~16.9M × 384 × 4 bytes ≈ **26 GB** (all-MiniLM) |
+| Index size | ~16.9M × 384 × 4 bytes ≈ **~26 GB** (all-MiniLM, full dataset) — currently **15 GB** (199/339 shards complete; will reach ~26 GB after full ingestion) |
 | Query time | < 1 second for k=20 on `IndexFlatL2` |
 | Exact search | `IndexFlatL2` gives exact results (no approximation) |
 | No server needed | Runs in-process, stored as a single file |
@@ -318,6 +318,11 @@ This project generates **Level 1** components.
 
 Use `outputs/dfd_components.md` or `outputs/dfd_components.json`.
 
+> **Note:** The first pipeline run (2026-03-14) produced an empty
+> `dfd_components.md` due to a JSON parsing bug in the chains (LLM preamble
+> text was not stripped before parsing). This is fixed in `03_chains.py` as of
+> v1.3. Re-run `python 04_generate_srs.py --skip-retrieval` to populate the file.
+
 1. Draw each **External Entity** as a labeled rectangle.
 2. Draw each **Process** as a labeled circle, numbered (P1, P2, …).
 3. Draw each **Data Store** as a labeled open rectangle (D1, D2, …).
@@ -372,6 +377,11 @@ ACTION                                      │
   are made inside each bubble).
 - In an SRS, CSPEC tables go into Section 4 alongside the DFD.
 - They directly inform the development of use cases and unit tests.
+
+> **Note:** The first pipeline run (2026-03-14) produced an empty
+> `cspec_tables.md` for the same reason as `dfd_components.md` — the JSON
+> parsing bug. This is fixed in `03_chains.py` as of v1.3. Re-run
+> `python 04_generate_srs.py --skip-retrieval` to populate the file.
 
 ---
 
@@ -493,6 +503,7 @@ baked into the prompt) to structure the findings into a formal SRS.
 | Date | Version | Changes |
 |---|---|---|
 | 2026-03-13 | v1.0 | Initial study guide. All theoretical concepts covered. |
+| 2026-03-14 | v1.1 | Updated FAISS index size to reflect partial ingestion state (15 GB / 199 shards; full ~26 GB). Added notes to Sections 8 and 9 about empty `dfd_components.md` and `cspec_tables.md` from first pipeline run and the fix applied. |
 
 ---
 
