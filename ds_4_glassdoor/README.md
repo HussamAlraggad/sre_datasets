@@ -141,7 +141,7 @@ LangChain: 0.x.x
 
 ## 5. Stage 1 — Build the FAISS Index
 
-This is the long step. It reads all 16.9 million rows, embeds them on the GPU,
+This is the long step. It reads all ~9.9 million rows, embeds them on the GPU,
 and writes the FAISS index to `faiss_index/`.
 
 ```bash
@@ -154,13 +154,13 @@ python 01_ingest.py
 |---|---|
 | Embedding model | `all-MiniLM-L6-v2` (default) |
 | Chunk size | 50 000 rows per shard |
-| Total shards | ~339 |
+| Total shards | 199 |
 | Time per shard | ~20–60 seconds (GPU) |
 | **Total time** | **2–6 hours** |
 | Disk usage | ~7–20 GB (all shards + merged index) |
 
-> **Current status (2026-03-14):** 199/339 shards complete — 9,901,718 / 16,935,367 rows embedded (58.5%).
-> The merged index exists and retrieval works. Run `python 01_ingest.py` to resume and complete the remaining 140 shards.
+> **Current status (2026-03-14):** Ingestion is complete — 199/199 shards, 9,901,889 rows fully embedded.
+> Note: `wc -l` previously reported ~16.9M lines, which was misleading — review text fields contain embedded newlines. The true row count confirmed via pandas is ~9.9M.
 
 Progress is saved to `faiss_index/progress.json` after every shard.
 **If the process is interrupted, just re-run the same command** — it will
@@ -356,7 +356,7 @@ python 01_ingest.py --merge-only
 |---|---|---|
 | 2026-03-13 | v1.0 | Initial project build. All five pipeline stages implemented. |
 | 2026-03-13 | v1.1 | Dependencies installed (`--break-system-packages`). `llama3:8b` pulled. GPU + Ollama smoke tests passed. Ready for Stage 1 ingest. |
-| 2026-03-14 | v1.2 | Stage 1 partial ingestion run: 199/339 shards completed (9,901,718 rows, 58.5%). Merged index built. Stage 3 first run: all 5 chains executed but chains 1–4 produced `{"error": ...}` JSON due to LLM wrapping output in natural-language preamble. `dfd_components.md` and `cspec_tables.md` empty as a result. `SRS.md` truncated mid-table (hit `LLM_NUM_PREDICT = 2048` token limit). |
+| 2026-03-14 | v1.2 | Stage 1 ingestion confirmed complete — 199/199 shards, 9,901,889 rows (100%). Note: `wc -l` incorrectly reported ~16.9M lines due to embedded newlines in review text fields; true row count confirmed via pandas. Stage 3 first run: all 5 chains executed but chains 1–4 produced `{"error": ...}` JSON due to LLM wrapping output in natural-language preamble. `dfd_components.md` and `cspec_tables.md` empty as a result. `SRS.md` truncated mid-table (hit `LLM_NUM_PREDICT = 2048` token limit). |
 | 2026-03-14 | v1.3 | Fixed `_safe_json()` in `03_chains.py` to strip natural-language preamble before JSON parsing. Raised `LLM_NUM_PREDICT` from 2048 → 8192 in `config.py` to fix SRS truncation. Re-run `04_generate_srs.py --skip-retrieval` to regenerate all outputs. |
 
 ---

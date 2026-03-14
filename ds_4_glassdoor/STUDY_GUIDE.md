@@ -59,7 +59,7 @@ A RAG system combines two AI components:
 
 ### In this project
 
-- **Documents** = 16.9 million Glassdoor reviews
+- **Documents** = ~9.9 million Glassdoor reviews
 - **Retriever** = FAISS index queried with L2 distance
 - **Generator** = Ollama `llama3:8b` running locally
 - **Task** = Extract software requirements from what real employees wrote
@@ -115,7 +115,7 @@ neighbour search in dense vector spaces.
 
 | Property | Value for this project |
 |---|---|
-| Index size | ~16.9M × 384 × 4 bytes ≈ **~26 GB** (all-MiniLM, full dataset) — currently **15 GB** (199/339 shards complete; will reach ~26 GB after full ingestion) |
+| Index size | ~9.9M × 384 × 4 bytes ≈ **15 GB** (all-MiniLM, full dataset — 199/199 shards complete) |
 | Query time | < 1 second for k=20 on `IndexFlatL2` |
 | Exact search | `IndexFlatL2` gives exact results (no approximation) |
 | No server needed | Runs in-process, stored as a single file |
@@ -466,7 +466,7 @@ Traditional requirements elicitation relies on:
 - Interviews, workshops, surveys (expensive, slow)
 - Reading competitor app reviews manually (tedious at scale)
 
-This RAG system automates the analysis of **16.9 million real employee
+This RAG system automates the analysis of **~9.9 million real employee
 reviews**, extracting patterns that no human analyst could process manually.
 The LLM then applies domain expertise (requirements engineering knowledge
 baked into the prompt) to structure the findings into a formal SRS.
@@ -504,6 +504,7 @@ baked into the prompt) to structure the findings into a formal SRS.
 |---|---|---|
 | 2026-03-13 | v1.0 | Initial study guide. All theoretical concepts covered. |
 | 2026-03-14 | v1.1 | Updated FAISS index size to reflect partial ingestion state (15 GB / 199 shards; full ~26 GB). Added notes to Sections 8 and 9 about empty `dfd_components.md` and `cspec_tables.md` from first pipeline run and the fix applied. |
+| 2026-03-14 | v1.2 | Corrected dataset row count from ~16.9M to ~9.9M across all references. `wc -l` was misleading — review text fields contain embedded newlines that inflate the raw line count. True row count confirmed via pandas: 9,901,889. Ingestion is 100% complete (199/199 shards). FAISS index size corrected to 15 GB (this is the full index, not partial). |
 
 ---
 
