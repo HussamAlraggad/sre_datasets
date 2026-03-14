@@ -18,39 +18,155 @@ MOSCOW PRIORITIZATION:
 DFD COMPONENTS:
 {dfd_json}
 
-── INSTRUCTIONS ─────────────────────────────────────────────────────────────
+── STRICT FORMATTING RULES ──────────────────────────────────────────────────
 
-Produce a complete, well-structured SRS document in Markdown format following
-the IEEE 830 section structure below.  Use all provided artefacts as source
-material — do NOT invent requirements or components that are not in the input.
+Follow every rule below exactly. Violations will invalidate the document.
 
-IEEE 830 SECTION STRUCTURE:
-1. Introduction
-   1.1 Purpose
-   1.2 Scope
-   1.3 Definitions, Acronyms, and Abbreviations
-   1.4 References
-   1.5 Overview
+1. DOCUMENT HEADER
+   Begin with exactly this block (fill in the values from PROJECT NAME, SRS VERSION, DATE above):
+   ```
+   # Software Requirements Specification
+   ## {project_name}
 
-2. Overall Description
-   2.1 Product Perspective
-   2.2 Product Functions (high-level summary of FRs)
-   2.3 User Characteristics
-   2.4 Constraints
-   2.5 Assumptions and Dependencies
+   | Field | Value |
+   |---|---|
+   | Version | {srs_version} |
+   | Date | {date} |
+   | Standard | IEEE 830 / IEEE 29148 |
+   | Authors | Auto-generated via RAG pipeline |
+   ```
 
-3. Specific Requirements
-   3.1 Functional Requirements  (one subsection per FR category; include ID, statement, rationale, MoSCoW priority)
-   3.2 Non-Functional Requirements (one subsection per NFR category; include ID, statement, rationale, MoSCoW priority)
+2. SECTION HEADINGS
+   Use Markdown headings only — `##` for top-level sections, `###` for subsections.
+   NEVER use **bold text** as a section heading substitute.
 
-4. System Models
-   4.1 Data Flow Diagram — Level 1 Description
-       (describe External Entities, Processes, Data Stores, Data Flows in prose + tables)
-   4.2 CSPEC — Control Specification Summary
-       (include the Activation Tables and Decision Tables formatted as Markdown tables)
+3. REQUIREMENT IDs
+   Use zero-padded three-digit IDs: FR-001, FR-002, … FR-010; NFR-001, … NFR-005.
+   Copy the IDs exactly from the input artefacts. Do NOT renumber.
 
-5. Appendices
-   5.1 MoSCoW Summary Table (all requirements with priority)
-   5.2 Traceability Matrix (FR/NFR ID ↔ DFD Process ID)
+4. "SHALL" LANGUAGE
+   Every requirement statement must begin with "The system shall …".
+   NEVER use "must", "should", "will", or "can" as the main verb.
+   Copy statements verbatim from the input artefacts.
 
-OUTPUT: Return only the full SRS Markdown document. Start with the title heading. No JSON, no extra commentary.
+5. MOSCOW LABELS
+   Use exactly: MUST, SHOULD, COULD, WON'T (all caps, no hyphens, no extra words).
+   Do NOT write "Must-Satisfy", "Should-Satisfy", etc.
+   Take the MoSCoW value from the MOSCOW PRIORITIZATION artefact for each ID.
+
+6. INCLUDE ALL REQUIREMENTS
+   Include EVERY requirement from the input — all 10 FRs and all 5 NFRs.
+   Do NOT summarise, drop, or merge any requirement.
+
+7. SECTION 1.4 REFERENCES
+   Always include these two references (never write "None"):
+   - IEEE 830-1998, IEEE Recommended Practice for Software Requirements Specifications.
+   - Glassdoor employee reviews dataset (~9.9 million rows), used as elicitation source.
+
+8. DFD SECTION (4.1) — COPY EXACTLY FROM THE JSON
+   You MUST iterate over every item in the DFD COMPONENTS artefact and copy it verbatim into four tables.
+   Do NOT invent or drop any entity, process, data store, or data flow.
+   Do NOT reduce 7 processes to fewer.
+
+   Required table schemas:
+
+   External Entities:
+   | ID | Name | Description |
+   |---|---|---|
+   (one row per item in "external_entities" array)
+
+   Processes:
+   | ID | Name | Description |
+   |---|---|---|
+   (one row per item in "processes" array — there are 7 processes P1–P7)
+
+   Data Stores:
+   | ID | Name | Description |
+   |---|---|---|
+   (one row per item in "data_stores" array)
+
+   Data Flows:
+   | Name | From | To | Description |
+   |---|---|---|---|
+   (one row per item in "data_flows" array)
+
+9. CSPEC SECTION (4.2) — COPY EXACTLY FROM THE JSON
+   Use the "activation_tables" and "decision_tables" arrays from the CSPEC data embedded in the DFD COMPONENTS.
+   If CSPEC data is not present in the DFD COMPONENTS, derive it from the processes list.
+   There must be EXACTLY one row per process in the Activation Table (P1 through P7 — all 7).
+
+   Activation Table (single table covering ALL processes):
+   | Process ID | Process Name | Condition | Trigger Type |
+   |---|---|---|---|
+   (one row per process P1 … P7)
+
+   Decision Tables: produce one per process (P1 … P7):
+   ### Decision Table: Px — <Process Name>
+   | Condition | R1 | R2 |
+   |---|---|---|
+   | <condition> | Y | N |
+   **Actions:**
+   | Action | R1 | R2 |
+   |---|---|---|
+   | <action if Y> | X | - |
+   | <action if N> | - | X |
+
+10. TRACEABILITY MATRIX (5.2)
+    Columns: FR/NFR ID | Requirement Statement (truncated to ~60 chars) | DFD Process IDs | MoSCoW
+    Use process IDs (P1, P2, …) not process names in the "DFD Process IDs" column.
+    Include every FR and NFR (all 15 rows).
+
+11. NO COMMENTARY — THIS IS THE MOST IMPORTANT RULE
+    The very last character of your output must be the closing `|` of the last table row.
+    Do NOT add ANY sentence, note, disclaimer, or comment after the last table.
+    Do NOT write anything like "Note:", "This document", "The above", "Generated by", etc.
+    Terminate the document immediately after the last row of the Traceability Matrix.
+
+── IEEE 830 SECTION STRUCTURE ────────────────────────────────────────────────
+
+Produce the complete SRS document using this exact section structure:
+
+## 1. Introduction
+### 1.1 Purpose
+### 1.2 Scope
+### 1.3 Definitions, Acronyms, and Abbreviations
+### 1.4 References
+### 1.5 Overview
+
+## 2. Overall Description
+### 2.1 Product Perspective
+### 2.2 Product Functions
+### 2.3 User Characteristics
+### 2.4 Constraints
+### 2.5 Assumptions and Dependencies
+
+## 3. Specific Requirements
+### 3.1 Functional Requirements
+(one subsection per FR category from the input; each entry: ID, statement starting with "The system shall", rationale, MoSCoW priority)
+### 3.2 Non-Functional Requirements
+(one subsection per NFR category; same format)
+
+## 4. System Models
+### 4.1 Data Flow Diagram — Level 1 Description
+(External Entities table, Processes table, Data Stores table, Data Flows table — all from DFD COMPONENTS artefact)
+### 4.2 CSPEC — Control Specification
+(Activation Table for all processes, then Decision Table per process)
+
+## 5. Appendices
+### 5.1 MoSCoW Summary Table
+This table MUST contain ALL 15 requirements (10 FRs + 5 NFRs).
+Do NOT omit NFRs. Do NOT add extra sections (5.2 Glossary, etc.).
+Take MoSCoW values from the MOSCOW PRIORITIZATION artefact.
+| ID | Statement | MoSCoW Priority | Justification |
+|---|---|---|---|
+(15 rows: FR-001 … FR-010, then NFR-001 … NFR-005)
+
+### 5.2 Traceability Matrix
+This section MUST be present. Do NOT replace it with Glossary or References.
+Columns: FR/NFR ID | Statement (first ~60 chars) | DFD Process IDs | MoSCoW
+Use P1, P2, … not process names. All 15 rows.
+| FR/NFR ID | Statement (truncated) | DFD Process IDs | MoSCoW |
+|---|---|---|---|
+(15 rows: FR-001 … FR-010, then NFR-001 … NFR-005)
+
+STOP HERE. Output nothing after the last `|` of the Traceability Matrix.

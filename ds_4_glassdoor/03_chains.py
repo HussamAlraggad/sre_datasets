@@ -95,8 +95,12 @@ _PROMPT_SRS      = _load_prompt("srs_formatter.txt")
 def _safe_json(raw: str, chain_name: str) -> dict:
     """
     Try to parse `raw` as JSON.
-    If the LLM wrapped the JSON in markdown fences, strip them first.
-    Returns the parsed dict, or a dict with an 'error' key on failure.
+    Handles three common LLM output patterns:
+      1. JSON wrapped in ```json ... ``` markdown fences
+      2. Natural-language preamble before the JSON object/array
+      3. Extra text / a second JSON block appended after the first object
+         (json.JSONDecoder.raw_decode stops after the first complete value)
+    Returns the parsed dict/list, or a dict with an 'error' key on failure.
     """
     text = raw.strip()
 
@@ -106,6 +110,7 @@ def _safe_json(raw: str, chain_name: str) -> dict:
         # drop first line (```json or ```) and last line (```)
         text = "\n".join(lines[1:-1]).strip()
 
+    # Find the first JSON object { or array [
     first_brace = min(
         (text.find("{") if text.find("{") != -1 else len(text)),
         (text.find("[") if text.find("[") != -1 else len(text)),
@@ -113,7 +118,10 @@ def _safe_json(raw: str, chain_name: str) -> dict:
     text = text[first_brace:]
 
     try:
-        return json.loads(text)
+        # raw_decode stops after the first complete JSON value, ignoring
+        # any trailing text or a second JSON block the LLM may have appended
+        obj, _ = json.JSONDecoder().raw_decode(text)
+        return obj
     except json.JSONDecodeError as exc:
         print(f"[WARN] {chain_name} returned non-JSON output: {exc}")
         return {"error": str(exc), "raw_output": raw}
@@ -268,6 +276,11 @@ def run_srs_chain(
     print("[Chain 5/5] SRS document formatting …", flush=True)
     response = llm.invoke(prompt)
     raw      = response.content if hasattr(response, "content") else str(response)
+
+    # Strip any conversational preamble before the first Markdown heading
+    heading_pos = raw.find("#")
+    if heading_pos > 0:
+        raw = raw[heading_pos:]
 
     print(f"            → SRS document: {len(raw):,} characters.")
     return raw

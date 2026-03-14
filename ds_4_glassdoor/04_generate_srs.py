@@ -164,6 +164,147 @@ def _dfd_to_markdown(dfd: dict) -> str:
     return "\n".join(lines)
 
 
+def _patch_srs(srs_text: str, requirements: dict, moscow: dict, dfd: dict) -> str:
+    """
+    Post-process the LLM-generated SRS to fix predictable quality issues:
+
+    1. Strip any trailing LLM commentary after the last '|' table row.
+    2. Remove spurious extra sections the LLM tends to hallucinate
+       (5.2 Glossary, 5.3 Acronyms, 5.4 References, standalone "None" lines).
+    3. If Section 5.2 Traceability Matrix is absent, append it deterministically
+       from the requirements, moscow, and dfd JSON data.
+    4. Ensure Section 1.3 has actual terms, not just "None".
+    """
+    import re
+
+    lines = srs_text.splitlines()
+
+    # ── 1. Strip trailing commentary after the last table row ─────────────────
+    last_table_line = max(
+        (i for i, ln in enumerate(lines) if ln.strip().startswith("|") and ln.strip().endswith("|")),
+        default=len(lines) - 1,
+    )
+    lines = lines[:last_table_line + 1]
+
+    # ── 2. Remove spurious extra sections the LLM hallucinates ────────────────
+    spurious_headings = re.compile(
+        r"^###\s+(5\.[3-9]|Glossary|Acronyms?|Abbreviations?|References?)",
+        re.IGNORECASE,
+    )
+    filtered: list[str] = []
+    skip_until_heading = False
+    for ln in lines:
+        if spurious_headings.match(ln):
+            skip_until_heading = True
+            continue
+        if skip_until_heading:
+            if ln.startswith("#"):
+                skip_until_heading = False
+            else:
+                continue
+        filtered.append(ln)
+    lines = filtered
+
+    # ── 3. Fix Section 1.3 if it only says "None" ─────────────────────────────
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        result.append(lines[i])
+        if lines[i].strip() == "### 1.3 Definitions, Acronyms, and Abbreviations":
+            # Check if next non-empty line is just "None"
+            j = i + 1
+            while j < len(lines) and lines[j].strip() == "":
+                j += 1
+            if j < len(lines) and lines[j].strip().lower() == "none":
+                # Replace with a proper definitions table
+                result.append("")
+                result.append("| Term | Definition |")
+                result.append("|---|---|")
+                result.append("| **FR** | Functional Requirement — what the system must do |")
+                result.append("| **NFR** | Non-Functional Requirement — how well the system must do it |")
+                result.append("| **MoSCoW** | Must / Should / Could / Won't — requirement prioritization framework |")
+                result.append("| **DFD** | Data Flow Diagram — graphical model of data movement |")
+                result.append("| **CSPEC** | Control Specification — process activation and decision logic |")
+                result.append("| **SRS** | Software Requirements Specification |")
+                result.append("| **IEEE 830** | IEEE standard for SRS document structure |")
+                i = j + 1  # skip the "None" line
+                continue
+        i += 1
+    lines = result
+
+    srs_text = "\n".join(lines)
+
+    # ── 4. Append Traceability Matrix if missing ──────────────────────────────
+    has_traceability = bool(re.search(r"###\s+5\.2\s+Traceability", srs_text, re.IGNORECASE))
+    if not has_traceability:
+        # Build a lookup: id → moscow priority
+        moscow_map: dict[str, str] = {}
+        for item in moscow.get("moscow_prioritization", []):
+            moscow_map[item["id"]] = item.get("moscow", "—")
+
+        # Build a lookup: requirement_id → statement (first 60 chars)
+        req_map: dict[str, str] = {}
+        for req in requirements.get("functional_requirements", []) + requirements.get("non_functional_requirements", []):
+            stmt = req.get("statement", "")
+            req_map[req["id"]] = stmt[:60] + ("…" if len(stmt) > 60 else "")
+
+        # Build a simple process-to-requirement mapping from DFD
+        # Map each FR/NFR to processes based on keyword overlap
+        processes = dfd.get("processes", [])
+        process_ids = [p["id"] for p in processes]
+
+        def _map_req_to_processes(req_id: str) -> str:
+            """Heuristic: assign processes based on FR category."""
+            category_map = {
+                "Authentication": ["P1"],
+                "Profile":        ["P1", "P2"],
+                "Review":         ["P2"],
+                "Search":         ["P3"],
+                "Analytics":      ["P4"],
+                "Notification":   ["P5"],
+                "Admin":          ["P6", "P7"],
+                "Moderation":     ["P6"],
+                "Integration":    ["P7"],
+                "Reliability":    process_ids[:3],
+                "Performance":    process_ids[:3],
+                "Security":       process_ids[:3],
+                "Usability":      process_ids[:3],
+                "Scalability":    process_ids[:3],
+                "Privacy":        process_ids[:2],
+            }
+            # Look up category from requirements JSON
+            for req in requirements.get("functional_requirements", []) + requirements.get("non_functional_requirements", []):
+                if req["id"] == req_id:
+                    cat = req.get("category", "")
+                    mapped = category_map.get(cat, process_ids[:2] if process_ids else ["P1"])
+                    # Filter to only IDs that actually exist in this run's DFD
+                    valid = [pid for pid in mapped if pid in process_ids]
+                    return ", ".join(valid) if valid else (process_ids[0] if process_ids else "P1")
+            return process_ids[0] if process_ids else "P1"
+
+        rows = []
+        all_reqs = (
+            requirements.get("functional_requirements", []) +
+            requirements.get("non_functional_requirements", [])
+        )
+        for req in all_reqs:
+            rid   = req["id"]
+            stmt  = req_map.get(rid, "")
+            procs = _map_req_to_processes(rid)
+            prio  = moscow_map.get(rid, "—")
+            rows.append(f"| {rid} | {stmt} | {procs} | {prio} |")
+
+        traceability_section = (
+            "\n\n### 5.2 Traceability Matrix\n\n"
+            "| FR/NFR ID | Statement (truncated) | DFD Process IDs | MoSCoW |\n"
+            "|---|---|---|---|\n"
+        ) + "\n".join(rows)
+
+        srs_text += traceability_section
+
+    return srs_text
+
+
 def _print_banner(title: str):
     width = 70
     print("\n" + "=" * width)
@@ -250,8 +391,9 @@ def main():
     dfd_md = _dfd_to_markdown(results["dfd"])
     _save_text(dfd_md, "dfd_components.md")
 
-    # SRS document (already Markdown from chain 5)
+    # SRS document (already Markdown from chain 5) — apply post-processing
     srs_text = results["srs_markdown"]
+    srs_text = _patch_srs(srs_text, results["requirements"], results["moscow"], results["dfd"])
     _save_text(srs_text, "SRS.md")
 
     # ── Done ──────────────────────────────────────────────────────────────────

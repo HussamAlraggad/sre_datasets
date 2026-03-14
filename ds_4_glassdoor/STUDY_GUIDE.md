@@ -54,7 +54,7 @@ A RAG system combines two AI components:
 |---|---|
 | Knowledge cut-off date | Retrieves live/custom documents |
 | Hallucination (invents facts) | Grounds answers in real text |
-| Can't process 3.5 GB of data | Stores data in vector index, retrieves what's relevant |
+| Can't process 3.6 GB of data | Stores data in vector index, retrieves what's relevant |
 | Generic answers | Answers come from YOUR data |
 
 ### In this project
@@ -118,7 +118,7 @@ neighbour search in dense vector spaces.
 | Index size | ~9.9M × 384 × 4 bytes ≈ **15 GB** (all-MiniLM, full dataset — 199/199 shards complete) |
 | Query time | < 1 second for k=20 on `IndexFlatL2` |
 | Exact search | `IndexFlatL2` gives exact results (no approximation) |
-| No server needed | Runs in-process, stored as a single file |
+| No server needed | Runs in-process, stored as two files (`merged.index` + `merged.pkl`) |
 
 ### Shard strategy (used in 01_ingest.py)
 
@@ -126,11 +126,11 @@ Because the full index is too large to build in memory all at once:
 
 1. Embed 50 000 rows → write `shard_00000.index`
 2. Embed next 50 000 rows → write `shard_00001.index`
-3. …repeat ~340 times…
+3. …repeat 199 times total…
 4. Read all shards → merge into `merged.index`
 
 Each shard holds 50 000 vectors × 384 dims × 4 bytes ≈ **73 MB**.
-The merged index is ~26 GB.
+The merged index (`merged.index`) is ~11 GB; together with the docstore (`merged.pkl`, ~3.6 GB) the total on-disk footprint is ~15 GB.
 
 ### Progress / resume
 
@@ -320,8 +320,8 @@ Use `outputs/dfd_components.md` or `outputs/dfd_components.json`.
 
 > **Note:** The first pipeline run (2026-03-14) produced an empty
 > `dfd_components.md` due to a JSON parsing bug in the chains (LLM preamble
-> text was not stripped before parsing). This is fixed in `03_chains.py` as of
-> v1.3. Re-run `python 04_generate_srs.py --skip-retrieval` to populate the file.
+> text was not stripped before parsing). This was fixed in `03_chains.py` as of
+> v1.3 and the pipeline was re-run — `dfd_components.md` is now fully populated.
 
 1. Draw each **External Entity** as a labeled rectangle.
 2. Draw each **Process** as a labeled circle, numbered (P1, P2, …).
@@ -380,8 +380,8 @@ ACTION                                      │
 
 > **Note:** The first pipeline run (2026-03-14) produced an empty
 > `cspec_tables.md` for the same reason as `dfd_components.md` — the JSON
-> parsing bug. This is fixed in `03_chains.py` as of v1.3. Re-run
-> `python 04_generate_srs.py --skip-retrieval` to populate the file.
+> parsing bug. This was fixed in `03_chains.py` as of v1.3 and the pipeline
+> was re-run — `cspec_tables.md` is now fully populated.
 
 ---
 
@@ -505,6 +505,7 @@ baked into the prompt) to structure the findings into a formal SRS.
 | 2026-03-13 | v1.0 | Initial study guide. All theoretical concepts covered. |
 | 2026-03-14 | v1.1 | Updated FAISS index size to reflect partial ingestion state (15 GB / 199 shards; full ~26 GB). Added notes to Sections 8 and 9 about empty `dfd_components.md` and `cspec_tables.md` from first pipeline run and the fix applied. |
 | 2026-03-14 | v1.2 | Corrected dataset row count from ~16.9M to ~9.9M across all references. `wc -l` was misleading — review text fields contain embedded newlines that inflate the raw line count. True row count confirmed via pandas: 9,901,889. Ingestion is 100% complete (199/199 shards). FAISS index size corrected to 15 GB (this is the full index, not partial). |
+| 2026-03-14 | v1.3 | Improved SRS quality notes: added explanation of IEEE 830 formatting rules enforced by the updated `prompts/srs_formatter.txt`, `_safe_json()` fix (raw_decode), and the post-processor in `04_generate_srs.py` that appends the Traceability Matrix and fixes Section 1.3 deterministically. |
 
 ---
 

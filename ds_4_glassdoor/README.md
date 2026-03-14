@@ -134,7 +134,7 @@ Expected output:
 CUDA: True
 GPU: NVIDIA GeForce RTX 5060 Laptop GPU
 FAISS: 1.x.x
-LangChain: 0.x.x
+LangChain: 1.x.x
 ```
 
 ---
@@ -157,7 +157,7 @@ python 01_ingest.py
 | Total shards | 199 |
 | Time per shard | ~20–60 seconds (GPU) |
 | **Total time** | **2–6 hours** |
-| Disk usage | ~7–20 GB (all shards + merged index) |
+| Disk usage | ~32 GB (18 GB shards + 11 GB merged.index + 3.6 GB merged.pkl) |
 
 > **Current status (2026-03-14):** Ingestion is complete — 199/199 shards, 9,901,889 rows fully embedded.
 > Note: `wc -l` previously reported ~16.9M lines, which was misleading — review text fields contain embedded newlines. The true row count confirmed via pandas is ~9.9M.
@@ -179,7 +179,7 @@ python 01_ingest.py --reset
 ### When it's done you will see
 
 ```
-[MERGE] Done. Total vectors: 16,XXX,XXX
+[MERGE] Done. Total vectors: 9,901,889
         Index  → faiss_index/merged.index
         Docstore → faiss_index/merged.pkl
 
@@ -281,7 +281,8 @@ All knobs are in `config.py`. Key ones:
 | `RETRIEVER_K` | `20` | Reviews retrieved per query |
 | `OLLAMA_MODEL` | `llama3:8b` | LLM used for all chains |
 | `LLM_TEMPERATURE` | `0.1` | Lower = more deterministic output |
-| `LLM_NUM_CTX` | `4096` | Context window (tokens) |
+| `LLM_NUM_CTX` | `4096` | Context window in tokens (conservative; raise to 8192 if needed) |
+| `LLM_NUM_PREDICT` | `8192` | Max tokens the LLM generates per chain call |
 | `DEFAULT_QUERY` | (long string) | Default retrieval query |
 
 **To switch embedding models** (better quality, uses more VRAM):
@@ -357,7 +358,8 @@ python 01_ingest.py --merge-only
 | 2026-03-13 | v1.0 | Initial project build. All five pipeline stages implemented. |
 | 2026-03-13 | v1.1 | Dependencies installed (`--break-system-packages`). `llama3:8b` pulled. GPU + Ollama smoke tests passed. Ready for Stage 1 ingest. |
 | 2026-03-14 | v1.2 | Stage 1 ingestion confirmed complete — 199/199 shards, 9,901,889 rows (100%). Note: `wc -l` incorrectly reported ~16.9M lines due to embedded newlines in review text fields; true row count confirmed via pandas. Stage 3 first run: all 5 chains executed but chains 1–4 produced `{"error": ...}` JSON due to LLM wrapping output in natural-language preamble. `dfd_components.md` and `cspec_tables.md` empty as a result. `SRS.md` truncated mid-table (hit `LLM_NUM_PREDICT = 2048` token limit). |
-| 2026-03-14 | v1.3 | Fixed `_safe_json()` in `03_chains.py` to strip natural-language preamble before JSON parsing. Raised `LLM_NUM_PREDICT` from 2048 → 8192 in `config.py` to fix SRS truncation. Re-run `04_generate_srs.py --skip-retrieval` to regenerate all outputs. |
+| 2026-03-14 | v1.3 | Fixed `_safe_json()` in `03_chains.py` to strip natural-language preamble before JSON parsing. Raised `LLM_NUM_PREDICT` from 2048 → 8192 in `config.py` to fix SRS truncation. Re-ran `04_generate_srs.py --skip-retrieval`; all outputs successfully regenerated. |
+| 2026-03-14 | v1.4 | Improved SRS quality: rewrote `prompts/srs_formatter.txt` with strict formatting rules (IEEE IDs, "shall" language, MUST/SHOULD/COULD labels, full DFD/CSPEC tables, proper section headings, references). Fixed `_safe_json()` to use `json.JSONDecoder.raw_decode()` so trailing LLM text after first JSON object no longer causes parse failures. Added SRS post-processor in `04_generate_srs.py` to deterministically append the Traceability Matrix and fix Section 1.3 when the LLM omits them. Re-ran pipeline — SRS.md now passes all IEEE 830 structural checks. |
 
 ---
 
