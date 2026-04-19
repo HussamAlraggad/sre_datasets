@@ -1,8 +1,10 @@
 # Execution Guide
 ## Glassdoor RAG — Software Requirements Engineering Pipeline
 
-> **Keep this document open while running the project.**
+> **Keep this document open while running the project from the repository root.**
 > Every step is listed in order. Do not skip steps.
+> Key root-level files: `01_ingest.py`, `02_retriever.py`, `03_chains.py`, `04_generate_srs.py`, `config.py`, `prompts/`, `faiss_index/`, `outputs/`, `STUDY_GUIDE.md`.
+> Place `all_reviews.csv` in the repository root before running Stage 1.
 
 ---
 
@@ -114,7 +116,7 @@ ollama serve &   # or run in a separate terminal
 
 ## 4. Verify the Setup
 
-Quick sanity check — run from the project directory:
+Quick sanity check — run from the repository root:
 
 ```bash
 python -c "
@@ -247,7 +249,7 @@ python 04_generate_srs.py --skip-retrieval
 
 ## 8. Output Files Reference
 
-All outputs are written to `outputs/`:
+All outputs are written to `outputs/` in the repository root:
 
 | File | Contents |
 |---|---|
