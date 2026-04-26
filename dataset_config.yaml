@@ -1,0 +1,139 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# dataset_config.yaml
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Configuration file for a single dataset in the SRE-RAG tool.
+# One config file per dataset; customize as needed for your research.
+#
+# REQUIRED FIELDS:
+#   - dataset_name: Human-readable name for this dataset
+#   - csv_path: Path to the CSV file (relative or absolute)
+#   - column_mappings: Which CSV columns to use for text and metadata
+#   - llm_settings: Local Ollama model and parameters
+#   - output_formats: Which output formats to generate (IEEE 830, JSON, etc.)
+#
+# OPTIONAL FIELDS:
+#   - categories: Define functional/non-functional requirement categories
+#   - filtering: Data cleaning and filtering rules
+#   - srs_metadata: Project metadata for SRS header
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dataset Identification
+# ─────────────────────────────────────────────────────────────────────────────
+dataset_name: "My Research Dataset"
+csv_path: "./data.csv"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Column Mappings
+# ─────────────────────────────────────────────────────────────────────────────
+# Specify which CSV columns to use for analysis and which to preserve as metadata.
+#
+# text_columns: List of column names to combine into the review text for analysis.
+#               These columns will be embedded and searched.
+#               Example: ["title", "description", "feedback"]
+#
+# metadata_columns: (Optional) List of columns to preserve for reference.
+#                   These won't be embedded but will appear in output.
+#                   Example: ["date", "author_id", "rating"]
+#
+column_mappings:
+  text_columns:
+    - "title"
+    - "description"
+    - "feedback"
+  metadata_columns:
+    - "date"
+    - "author"
+    - "rating"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Categories (Optional)
+# ─────────────────────────────────────────────────────────────────────────────
+# Define requirement categories for your domain.
+# If enabled, the tool will organize extracted requirements by these categories.
+#
+# Set enabled: false to skip categorization (faster, simpler output).
+# Set enabled: true to enable categorization (requires LLM inference).
+#
+categories:
+  enabled: false
+  # If enabled, provide your domain-specific categories:
+  # functional_requirements:
+  #   - "Authentication"
+  #   - "Data Management"
+  #   - "Reporting"
+  # non_functional_requirements:
+  #   - "Performance"
+  #   - "Security"
+  #   - "Scalability"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM Settings (Local Ollama Only)
+# ─────────────────────────────────────────────────────────────────────────────
+# Configure the local Ollama model to use for analysis.
+#
+# model: Name of the Ollama model (must be pulled locally first)
+#        Examples: "llama3.1:8b", "deepseek-r1:8b", "codellama:13b"
+#
+# ollama_url: URL where Ollama is running (default: http://localhost:11434)
+#
+# temperature: Randomness in generation (0.0 = deterministic, 1.0 = creative)
+#              Use 0.1 for structured output (SRS, JSON)
+#              Use 0.7 for more creative analysis
+#
+# num_ctx: Context window size in tokens (how much text the model can see at once)
+#          Llama 3.1 8B supports up to 8192 tokens
+#
+# num_predict: Maximum tokens to generate per response
+#              Use 4096-8192 for detailed SRS generation
+#
+llm_settings:
+  model: "llama3.1:8b"
+  ollama_url: "http://localhost:11434"
+  temperature: 0.1
+  num_ctx: 4096
+  num_predict: 8192
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Filtering & Data Cleaning (Optional)
+# ─────────────────────────────────────────────────────────────────────────────
+# Configure how the tool cleans and filters data before analysis.
+#
+# remove_empty_records: Remove rows where text is empty (default: true)
+#
+# min_text_length: Minimum character length for a record to be kept (default: 10)
+#
+filtering:
+  remove_empty_records: true
+  min_text_length: 10
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Output Formats
+# ─────────────────────────────────────────────────────────────────────────────
+# Which output formats to generate.
+# Valid options: "ieee_830", "ieee_29148", "json", "csv", "excel"
+#
+# ieee_830: IEEE 830 Software Requirements Specification (default, recommended)
+# ieee_29148: IEEE 29148 Systems and Software Engineering Requirements (alternative)
+# json: Structured JSON output for programmatic use
+# csv: Comma-separated values for spreadsheet analysis
+# excel: Excel workbook with multiple sheets
+#
+output_formats:
+  - "ieee_830"
+  - "json"
+  - "excel"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SRS Metadata (Optional)
+# ─────────────────────────────────────────────────────────────────────────────
+# Metadata to include in the SRS header (IEEE 830 format).
+#
+srs_metadata:
+  project_name: "My Research Project"
+  version: "1.0"
+  authors:
+    - "Auto-generated via RAG pipeline"
+  date: "2026-04-27"
