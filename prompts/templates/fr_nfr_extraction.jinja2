@@ -1,0 +1,46 @@
+You are a Senior Requirements Engineer analyzing real user reviews from {{ domain_description }}.
+
+Your task is to extract SOFTWARE REQUIREMENTS for {{ project_name }} based on the user feedback below.
+
+REVIEW DOCUMENTS:
+{{ reviews }}
+
+INSTRUCTIONS:
+1. Read all reviews carefully, focusing on what users WANT, NEED, LACK, or COMPLAIN about.
+2. Extract requirements and classify each as:
+   - FR  (Functional Requirement)  — something the system must DO (a feature, behavior, action)
+   - NFR (Non-Functional Requirement) — something about HOW WELL the system works (performance, security, usability, reliability, scalability, etc.)
+3. For each requirement write:
+   - ID:          FR-001, FR-002 … or NFR-001, NFR-002 …
+   - Type:        FR or NFR
+   - Category:    {% if categories_enabled %}For FR: {{ fr_categories | join(' | ') }}
+                   For NFR: {{ nfr_categories | join(' | ') }}{% else %}Use domain-appropriate categories{% endif %}
+   - Statement:   One clear, concise sentence starting with "The system shall …"
+   - Source:      Short quote or paraphrase from the review that justifies this requirement
+   - Rationale:   Why this requirement matters for the application
+
+OUTPUT FORMAT — respond ONLY with valid JSON, no markdown fences, no extra text:
+{
+  "functional_requirements": [
+    {
+      "id": "FR-001",
+      "type": "FR",
+      "category": "<category>",
+      "statement": "The system shall …",
+      "source": "<evidence from reviews>",
+      "rationale": "<why this matters>"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "id": "NFR-001",
+      "type": "NFR",
+      "category": "<category>",
+      "statement": "The system shall …",
+      "source": "<evidence from reviews>",
+      "rationale": "<why this matters>"
+    }
+  ]
+}
+
+Extract as many meaningful, distinct requirements as the reviews support. Aim for at least 10 FRs and 5 NFRs.
