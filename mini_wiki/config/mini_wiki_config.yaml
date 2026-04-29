@@ -1,0 +1,267 @@
+# mini_wiki Configuration
+
+app:
+  name: "mini_wiki"
+  version: "1.0.0"
+  debug: false
+  log_level: "INFO"
+  log_file: "./logs/mini_wiki.log"
+
+# Dataset configuration
+dataset:
+  storage_dir: "./data"
+  cache_dir: "./cache"
+  max_size_mb: 1000
+  auto_backup: true
+  backup_dir: "./backups"
+
+# Dataset loader configuration
+dataset_loader:
+  csv:
+    delimiter: ","
+    encoding: "utf-8"
+    skip_rows: 0
+    content_column: "content"
+    metadata_columns: ["id", "title", "author", "date"]
+    quote_char: '"'
+    escape_char: "\\"
+  
+  json:
+    flatten: true
+    content_field: "content"
+    metadata_fields: ["id", "title", "author"]
+    max_depth: 3
+  
+  jsonl:
+    content_field: "content"
+    metadata_fields: ["id", "title"]
+  
+  pdf:
+    extract_text: true
+    extract_metadata: true
+    pages: null  # null = all pages
+    ocr_enabled: false
+  
+  txt:
+    encoding: "utf-8"
+    split_by: "paragraph"  # or "sentence", "line"
+  
+  url:
+    timeout: 30
+    verify_ssl: true
+    user_agent: "mini_wiki/1.0"
+
+# Embeddings configuration
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  model_type: "sentence_transformers"  # or "openai", "huggingface"
+  dimension: 384
+  batch_size: 32
+  device: "cpu"  # or "cuda", "mps"
+  cache_dir: "./cache/embeddings"
+  normalize: true
+  
+  # OpenAI configuration (if using OpenAI embeddings)
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    model: "text-embedding-3-small"
+    organization: null
+
+# Indexing configuration
+indexing:
+  index_type: "IVFFlat"  # or "Flat", "HNSW", "LSH"
+  nlist: 100  # number of clusters for IVFFlat
+  nprobe: 10  # number of clusters to search
+  metric: "L2"  # or "IP" (inner product)
+  cache_dir: "./cache/indexes"
+  auto_save: true
+  save_interval: 100  # save after N operations
+
+# Ranking configuration
+ranking:
+  weights:
+    relevance: 0.6
+    importance: 0.4
+  
+  relevance:
+    method: "hybrid"  # or "cosine", "tfidf"
+    cosine_weight: 0.7
+    tfidf_weight: 0.3
+    min_score: 0.1
+    normalize: true
+  
+  importance:
+    method: "multi_factor"
+    frequency_weight: 0.3
+    length_weight: 0.2
+    recency_weight: 0.3
+    citations_weight: 0.2
+    min_score: 0.0
+    normalize: true
+  
+  normalization: "minmax"  # or "zscore", "sigmoid"
+  
+  # Preset configurations
+  presets:
+    research_focused:
+      relevance: 0.7
+      importance: 0.3
+    balanced:
+      relevance: 0.6
+      importance: 0.4
+    importance_focused:
+      relevance: 0.4
+      importance: 0.6
+
+# Filtering configuration
+filtering:
+  default_threshold: 0.5
+  default_filters: []
+  
+  # Example filters (commented out)
+  # - type: "threshold"
+  #   field: "final_score"
+  #   operator: ">"
+  #   value: 0.5
+  # - type: "keyword"
+  #   field: "content"
+  #   keywords: ["machine learning", "AI"]
+  #   match_type: "any"
+
+# Export configuration
+export:
+  formats: ["csv", "json", "yaml", "markdown", "excel"]
+  default_format: "csv"
+  include_reference: true
+  include_metadata: true
+  output_dir: "./exports"
+  
+  # Format-specific options
+  csv:
+    delimiter: ","
+    include_scores: true
+    include_metadata: true
+  
+  json:
+    indent: 2
+    include_scores: true
+    include_metadata: true
+  
+  yaml:
+    include_scores: true
+    include_metadata: true
+    include_reference: true
+  
+  markdown:
+    include_scores: true
+    include_metadata: true
+    table_format: "github"  # or "rst", "html"
+
+# UI configuration
+ui:
+  theme: "dark"  # or "light"
+  table_width: 120
+  results_per_page: 20
+  show_scores: true
+  show_metadata: true
+  color_scheme:
+    primary: "cyan"
+    secondary: "green"
+    error: "red"
+    warning: "yellow"
+    success: "green"
+
+# AI Teaching configuration
+ai_teaching:
+  include_methodology: true
+  include_metrics: true
+  include_top_content: true
+  top_content_limit: 20
+  
+  # Template configuration
+  template_format: "yaml"  # or "json"
+  include_examples: true
+  
+  # Quality metrics
+  calculate_metrics: true
+  metrics:
+    - "completeness"
+    - "average_relevance"
+    - "coverage"
+    - "diversity"
+
+# Analysis configuration
+analysis:
+  enable_clustering: true
+  enable_summarization: true
+  enable_statistics: true
+  
+  clustering:
+    method: "kmeans"  # or "hierarchical", "dbscan"
+    n_clusters: 5
+  
+  summarization:
+    method: "extractive"  # or "abstractive"
+    summary_ratio: 0.3
+  
+  statistics:
+    calculate_distribution: true
+    calculate_correlation: true
+
+# Storage configuration
+storage:
+  database_type: "sqlite"  # or "postgresql", "mongodb"
+  sqlite:
+    path: "./data/mini_wiki.db"
+    timeout: 30
+    check_same_thread: false
+  
+  cache:
+    type: "file"  # or "redis", "memcached"
+    ttl: 3600  # seconds
+    max_size: 1000  # MB
+
+# Logging configuration
+logging:
+  version: 1
+  disable_existing_loggers: false
+  
+  formatters:
+    standard:
+      format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    detailed:
+      format: "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d: %(message)s"
+  
+  handlers:
+    console:
+      class: "logging.StreamHandler"
+      level: "INFO"
+      formatter: "standard"
+      stream: "ext://sys.stdout"
+    
+    file:
+      class: "logging.FileHandler"
+      level: "DEBUG"
+      formatter: "detailed"
+      filename: "./logs/mini_wiki.log"
+  
+  root:
+    level: "INFO"
+    handlers: ["console", "file"]
+
+# Performance configuration
+performance:
+  enable_caching: true
+  enable_profiling: false
+  batch_processing: true
+  batch_size: 32
+  num_workers: 4
+  use_gpu: false
+
+# Security configuration
+security:
+  validate_input: true
+  max_file_size_mb: 1000
+  allowed_file_types: ["csv", "json", "jsonl", "pdf", "txt"]
+  sanitize_paths: true
+  encrypt_sensitive_data: false
