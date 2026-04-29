@@ -18,8 +18,9 @@ Each chain is a plain function that accepts string inputs and returns a string.
 Chains 2–5 receive the JSON output of the previous chain as input, forming a
 linear processing pipeline.
 
-All prompt templates live in prompts/ and are loaded at module import time so
-that missing files fail loudly before any LLM calls are made.
+All prompt templates are loaded via PromptLoader from Jinja2 templates in
+prompts/templates/. Templates are parameterized with custom categories,
+domain descriptions, and project names from dataset_config.yaml.
 
 Dependencies
 ------------
@@ -42,6 +43,7 @@ from config import (
     SRS_VERSION,
     SRS_STANDARD,
 )
+from utils import PromptLoader, ConfigValidator
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -70,22 +72,31 @@ def _get_llm():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Prompt loader
+# Prompt loader initialization
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _load_prompt(filename: str) -> str:
-    path = PROMPTS_DIR / filename
-    if not path.exists():
-        raise FileNotFoundError(f"Prompt template not found: {path}")
-    return path.read_text(encoding="utf-8")
+def _load_config() -> dict:
+    """Load dataset_config.yaml or use defaults."""
+    config_path = Path("dataset_config.yaml")
+    if config_path.exists():
+        try:
+            return ConfigValidator.load_config(config_path)
+        except Exception as e:
+            print(f"[WARN] Failed to load config: {e}")
+            return {}
+    return {}
 
 
-# Load all templates at import time — fail fast if any are missing
-_PROMPT_FR_NFR   = _load_prompt("fr_nfr_extraction.txt")
-_PROMPT_MOSCOW   = _load_prompt("moscow_prioritization.txt")
-_PROMPT_DFD      = _load_prompt("dfd_components.txt")
-_PROMPT_CSPEC    = _load_prompt("cspec_logic.txt")
-_PROMPT_SRS      = _load_prompt("srs_formatter.txt")
+# Initialize PromptLoader and load config
+_prompt_loader = PromptLoader()
+_config = _load_config()
+
+# Get configuration parameters for template rendering
+_domain_description = _config.get("srs_metadata", {}).get("domain_description", "")
+_project_name = _config.get("srs_metadata", {}).get("project_name", SRS_PROJECT_NAME)
+_categories_enabled = _config.get("categories", {}).get("enabled", False)
+_fr_categories = _config.get("categories", {}).get("functional_requirements", [])
+_nfr_categories = _config.get("categories", {}).get("non_functional_requirements", [])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -143,7 +154,17 @@ def run_fr_nfr_chain(reviews: list[str], llm=None) -> dict:
     reviews_text = "\n\n---\n\n".join(
         f"[Review {i+1}]\n{r}" for i, r in enumerate(reviews)
     )
-    prompt = _PROMPT_FR_NFR.format(reviews=reviews_text)
+    
+    # Render template with configuration parameters
+    prompt = _prompt_loader.render(
+        "fr_nfr_extraction",
+        reviews=reviews_text,
+        domain_description=_domain_description,
+        project_name=_project_name,
+        categories_enabled=_categories_enabled,
+        fr_categories=_fr_categories,
+        nfr_categories=_nfr_categories,
+    )
 
     print("[Chain 1/5] FR/NFR extraction …", flush=True)
     response = llm.invoke(prompt)
@@ -169,7 +190,13 @@ def run_moscow_chain(requirements: dict, llm=None) -> dict:
         llm = _get_llm()
 
     requirements_json = json.dumps(requirements, indent=2, ensure_ascii=False)
-    prompt = _PROMPT_MOSCOW.format(requirements_json=requirements_json)
+    
+    # Render template with configuration parameters
+    prompt = _prompt_loader.render(
+        "moscow_prioritization",
+        requirements_json=requirements_json,
+        project_name=_project_name,
+    )
 
     print("[Chain 2/5] MoSCoW prioritization …", flush=True)
     response = llm.invoke(prompt)
@@ -200,7 +227,13 @@ def run_dfd_chain(requirements: dict, llm=None) -> dict:
         llm = _get_llm()
 
     requirements_json = json.dumps(requirements, indent=2, ensure_ascii=False)
-    prompt = _PROMPT_DFD.format(requirements_json=requirements_json)
+    
+    # Render template with configuration parameters
+    prompt = _prompt_loader.render(
+        "dfd_components",
+        requirements_json=requirements_json,
+        project_name=_project_name,
+    )
 
     print("[Chain 3/5] DFD component identification …", flush=True)
     response = llm.invoke(prompt)
@@ -230,7 +263,13 @@ def run_cspec_chain(dfd: dict, llm=None) -> dict:
         llm = _get_llm()
 
     dfd_json = json.dumps(dfd, indent=2, ensure_ascii=False)
-    prompt   = _PROMPT_CSPEC.format(dfd_json=dfd_json)
+    
+    # Render template with configuration parameters
+    prompt = _prompt_loader.render(
+        "cspec_logic",
+        dfd_json=dfd_json,
+        project_name=_project_name,
+    )
 
     print("[Chain 4/5] CSPEC logic extraction …", flush=True)
     response = llm.invoke(prompt)
@@ -264,13 +303,15 @@ def run_srs_chain(
     if llm is None:
         llm = _get_llm()
 
-    prompt = _PROMPT_SRS.format(
-        project_name      = SRS_PROJECT_NAME,
-        srs_version       = SRS_VERSION,
-        date              = _date.today().isoformat(),
-        requirements_json = json.dumps(requirements, indent=2, ensure_ascii=False),
-        moscow_json       = json.dumps(moscow,       indent=2, ensure_ascii=False),
-        dfd_json          = json.dumps(dfd,          indent=2, ensure_ascii=False),
+    # Render template with configuration parameters
+    prompt = _prompt_loader.render(
+        "srs_formatter",
+        requirements_json=json.dumps(requirements, indent=2, ensure_ascii=False),
+        moscow_json=json.dumps(moscow, indent=2, ensure_ascii=False),
+        dfd_json=json.dumps(dfd, indent=2, ensure_ascii=False),
+        project_name=_project_name,
+        srs_version=SRS_VERSION,
+        date=_date.today().isoformat(),
     )
 
     print("[Chain 5/5] SRS document formatting …", flush=True)
