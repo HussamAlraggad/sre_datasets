@@ -7,7 +7,8 @@ Ties together all pipeline stages:
   1. Load FAISS retriever (02_retriever.py)
   2. Retrieve top-k reviews for the query
   3. Run all 5 LangChain chains (03_chains.py)
-  4. Write output files to outputs/
+  4. Format output using OutputFormatters (IEEE 830, IEEE 29148, JSON, CSV, Excel)
+  5. Write output files to outputs/
 
 Output files produced
 ---------------------
@@ -16,7 +17,8 @@ Output files produced
   outputs/dfd_components.json  — DFD entities, processes, stores, flows
   outputs/cspec_tables.json    — Activation + Decision tables (raw JSON)
   outputs/cspec_tables.md      — CSPEC tables formatted as Markdown
-  outputs/SRS.md               — Full IEEE 830 SRS document
+  outputs/SRS.*                — Full SRS document (format from config)
+                                 Supports: .txt (IEEE 830), .md (IEEE 29148), .json, .csv, .xlsx
 
 Usage
 -----
@@ -24,6 +26,8 @@ Usage
     python 04_generate_srs.py --query "What salary features do users want?"
     python 04_generate_srs.py --k 30 --query "remote work and flexibility features"
     python 04_generate_srs.py --skip-retrieval  # re-run chains on existing reviews.json
+    python 04_generate_srs.py --format ieee_29148  # use IEEE 29148 instead of IEEE 830
+    python 04_generate_srs.py --format excel  # export to Excel workbook
 """
 
 import argparse
@@ -41,6 +45,23 @@ from config import (
     SRS_PROJECT_NAME,
     SRS_VERSION,
 )
+from utils import get_formatter, list_formats, ConfigValidator
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration loading
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_config() -> dict:
+    """Load dataset_config.yaml or use defaults."""
+    config_path = Path("dataset_config.yaml")
+    if config_path.exists():
+        try:
+            return ConfigValidator.load_config(config_path)
+        except Exception as e:
+            print(f"[WARN] Failed to load config: {e}")
+            return {}
+    return {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -408,7 +429,7 @@ def _print_banner(title: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Glassdoor RAG — SRS Generator",
+        description="SRE-RAG — SRS Generator",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
             Examples:
@@ -416,6 +437,8 @@ def main():
               python 04_generate_srs.py --query "salary transparency features"
               python 04_generate_srs.py --k 30
               python 04_generate_srs.py --skip-retrieval
+              python 04_generate_srs.py --format ieee_29148
+              python 04_generate_srs.py --format excel
         """),
     )
     parser.add_argument(
@@ -434,10 +457,27 @@ def main():
         action="store_true",
         help="Skip retrieval; reuse outputs/retrieved_reviews.json if it exists",
     )
+    parser.add_argument(
+        "--format", "-f",
+        default="ieee_830",
+        choices=list_formats(),
+        help=f"Output format (default: ieee_830). Available: {', '.join(list_formats())}",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("dataset_config.yaml"),
+        help="Path to dataset_config.yaml (default: dataset_config.yaml)",
+    )
     args = parser.parse_args()
 
     start_time = datetime.now()
-    _print_banner(f"Glassdoor RAG — SRS Generator  |  {start_time.strftime('%Y-%m-%d %H:%M')}")
+    _print_banner(f"SRE-RAG — SRS Generator  |  {start_time.strftime('%Y-%m-%d %H:%M')}")
+
+    # Load configuration
+    config = _load_config()
+    project_name = config.get("srs_metadata", {}).get("project_name", SRS_PROJECT_NAME)
+    srs_version = config.get("srs_metadata", {}).get("srs_version", SRS_VERSION)
 
     # ── Step 1: Retrieve reviews ──────────────────────────────────────────────
     retrieved_path = OUTPUTS_DIR / "retrieved_reviews.json"
@@ -481,10 +521,36 @@ def main():
     dfd_md = _dfd_to_markdown(results["dfd"])
     _save_text(dfd_md, "dfd_components.md")
 
-    # SRS document (already Markdown from chain 5) — apply post-processing
-    srs_text = results["srs_markdown"]
-    srs_text = _patch_srs(srs_text, results["requirements"], results["moscow"], results["dfd"])
-    _save_text(srs_text, "SRS.md")
+    # ── Step 4: Format and save SRS in selected format ────────────────────────
+    print(f"\n[STEP 3/5] Formatting SRS as {args.format} …\n")
+    
+    # Prepare SRS data for formatter
+    srs_data = {
+        "requirements": results["requirements"],
+        "moscow": results["moscow"],
+        "dfd": results["dfd"],
+        "cspec": results["cspec"],
+    }
+    
+    # Get formatter and format SRS
+    formatter = get_formatter(args.format, project_name=project_name, srs_version=srs_version)
+    formatter.format_srs(srs_data)
+    
+    # Determine output file extension based on format
+    format_extensions = {
+        "ieee_830": ".txt",
+        "ieee_29148": ".txt",
+        "json": ".json",
+        "csv": ".csv",
+        "excel": ".xlsx",
+    }
+    ext = format_extensions.get(args.format, ".txt")
+    output_filename = f"SRS{ext}"
+    
+    # Save formatted output
+    output_path = OUTPUTS_DIR / output_filename
+    formatter.save(output_path)
+    print(f"  [SAVED] {output_path}\n")
 
     # ── Done ──────────────────────────────────────────────────────────────────
     elapsed = (datetime.now() - start_time).total_seconds()
@@ -499,13 +565,13 @@ def main():
         "dfd_components.md",
         "cspec_tables.json",
         "cspec_tables.md",
-        "SRS.md",
+        output_filename,
     ]:
         p = OUTPUTS_DIR / fname
         size = p.stat().st_size if p.exists() else 0
         print(f"  {p}  ({size:,} bytes)")
 
-    print(f"\nSRS document: {OUTPUTS_DIR / 'SRS.md'}\n")
+    print(f"\nSRS document: {OUTPUTS_DIR / output_filename}\n")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
