@@ -1,161 +1,108 @@
 #!/usr/bin/env python3
 """
 mini_wiki - Universal Research Assistant
-Entry point script for running mini_wiki
+Entry point script for running mini_wiki from anywhere
 
 Usage:
-    python3 mini_wiki/run_interactive.py          # Interactive mode
-    python3 mini_wiki/run_interactive.py --tui     # TUI mode
-    python3 mini_wiki/run_interactive.py --demo     # Demo mode
+    mini_wiki              # Interactive mode
+    mini_wiki --tui        # TUI mode (curses-based)
+    mini_wiki --demo       # Demo mode
+    mini_wiki search "ml"  # Quick search
+    mini_wiki version      # Show version
 """
 
 import argparse
 import json
 import logging
+import os
 import sys
 import tempfile
 from pathlib import Path
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+def _setup_path():
+    """Ensure mini_wiki package is importable regardless of working directory"""
+    # Find the package root: the directory containing this script's parent
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent  # go up from mini_wiki/ to datasets/
+
+    # Add both possible locations
+    for p in [str(script_dir), str(project_root)]:
+        if p not in sys.path:
+            sys.path.insert(0, p)
 
 
 def run_demo():
     """Run a demonstration of mini_wiki features"""
+    from mini_wiki.integrated_system import MiniWikiIntegratedSystem, SystemConfig
+
     print("=" * 60)
     print("  mini_wiki - Universal Research Assistant")
     print("  Demo Mode")
     print("=" * 60)
     print()
 
-    # Import integrated system
-    from mini_wiki.integrated_system import MiniWikiIntegratedSystem, SystemConfig
-
-    # Create system with temporary storage
     with tempfile.TemporaryDirectory() as tmpdir:
         config = SystemConfig(
             data_path=str(Path(tmpdir) / "data"),
             index_path=str(Path(tmpdir) / "index"),
             storage_path=str(Path(tmpdir) / "storage"),
-            theme="dark",
-            max_results=10,
         )
         system = MiniWikiIntegratedSystem(config)
 
-        # 1. Load sample data
+        # 1. Load data
         print("1. Loading sample data...")
         system.load_data("sample_documents.csv", "csv")
-        system.load_data("sample_papers.json", "json")
-        print("   ✓ Data loaded successfully")
+        print("   ✓ Data loaded")
         print()
 
         # 2. Search
         print("2. Searching for 'machine learning'...")
         results = system.search("machine learning", limit=5)
         print(f"   Found {len(results)} results:")
-        for i, result in enumerate(results, 1):
-            title = result.get("title", "Untitled")
-            relevance = result.get("relevance", 0)
-            print(f"   {i}. {title} (relevance: {relevance:.2f})")
+        for i, r in enumerate(results, 1):
+            print(f"   {i}. {r.get('title', 'Untitled')} (relevance: {r.get('relevance', 0):.2f})")
         print()
 
-        # 3. Search with filters
-        print("3. Searching with filters (min_relevance=0.7)...")
-        filtered_results = system.search(
-            "python",
-            limit=5,
-            filter_criteria={"min_relevance": 0.7},
-        )
-        print(f"   Found {len(filtered_results)} filtered results")
+        # 3. Export
+        print("3. Exporting results...")
+        out = str(Path(tmpdir) / "results.json")
+        system.export_results(results, "json", out)
+        print(f"   ✓ Exported to {out}")
         print()
 
-        # 4. Export results
-        print("4. Exporting results...")
-        output_path = str(Path(tmpdir) / "results.json")
-        success = system.export_results(results, "json", output_path)
-        if success:
-            print(f"   ✓ Results exported to {output_path}")
-        else:
-            print("   ✗ Export failed")
+        # 4. Bookmarks
+        print("4. Adding bookmark...")
+        system.add_bookmark("Important Paper", "http://example.com", "doc1", ["ml"])
+        print("   ✓ Bookmark added")
         print()
 
-        # 5. Add bookmarks
-        print("5. Adding bookmarks...")
-        if results:
-            system.add_bookmark(
-                title=results[0].get("title", "Untitled"),
-                url="http://example.com",
-                document_id=results[0].get("id", "1"),
-                tags=["important", "research"],
-            )
-            print("   ✓ Bookmark added")
-        print()
-
-        # 6. Search history
-        print("6. Search history...")
-        history = system.get_search_history(limit=5)
-        print(f"   {len(history)} search entries in history")
-        print()
-
-        # 7. Recent items
-        print("7. Recent items...")
-        recent = system.get_recent_items(limit=5)
-        print(f"   {len(recent)} recent items")
-        print()
-
-        # 8. Statistics
-        print("8. System statistics...")
+        # 5. Stats
+        print("5. System statistics...")
         stats = system.get_statistics()
-        print(f"   Total searches: {stats['total_searches']}")
-        print(f"   Bookmarks: {stats['bookmarks_count']}")
+        print(f"   Searches: {stats['total_searches']}, Bookmarks: {stats['bookmarks_count']}")
         print()
 
-        # 9. Health check
-        print("9. Health check...")
+        # 6. Health
+        print("6. Health check...")
         health = system.health_check()
-        print(f"   System status: {health['status']}")
-        for component, status in health["components"].items():
-            print(f"   {component}: {status}")
-        print()
-
-        # 10. Optimize performance
-        print("10. Optimizing performance...")
-        system.optimize_performance()
-        print("   ✓ Performance optimized")
+        print(f"   Status: {health['status']}")
         print()
 
     print("=" * 60)
-    print("  Demo completed successfully!")
+    print("  Demo completed!")
     print("=" * 60)
 
 
 def run_tui():
     """Run the TUI interface using curses"""
-    try:
-        from mini_wiki.ui.tui_app import CursesTUI
-        tui = CursesTUI()
-        tui.start()
-    except ImportError as e:
-        print(f"TUI dependencies not available: {e}")
-        print("Falling back to interactive mode...")
-        run_interactive()
-    except Exception as e:
-        print(f"TUI error: {e}")
-        print("Falling back to interactive mode...")
-        run_interactive()
+    from mini_wiki.ui.tui_app import CursesTUI
+    tui = CursesTUI()
+    tui.start()
 
 
 def run_interactive():
-    """Run in interactive mode"""
+    """Run in interactive REPL mode"""
     from mini_wiki.integrated_system import MiniWikiIntegratedSystem, SystemConfig
 
     print("=" * 60)
@@ -163,12 +110,10 @@ def run_interactive():
     print("  Interactive Mode")
     print("=" * 60)
     print()
-    print("Type 'help' for available commands, 'quit' to exit")
+    print("Type 'help' for commands, 'quit' to exit")
     print()
 
-    # Create system
-    config = SystemConfig()
-    system = MiniWikiIntegratedSystem(config)
+    system = MiniWikiIntegratedSystem(SystemConfig())
 
     while True:
         try:
@@ -181,135 +126,121 @@ def run_interactive():
             if not command:
                 continue
 
-            if command == "quit" or command == "exit":
+            parts = command.split(maxsplit=1)
+            cmd = parts[0].lower()
+            arg = parts[1] if len(parts) > 1 else ""
+
+            if cmd in ("quit", "exit", "q"):
                 print("Goodbye!")
                 break
-
-            elif command == "help":
+            elif cmd == "help":
                 print()
-                print("Available commands:")
-                print("  help              - Show this help message")
-                print("  load <path>       - Load data from file")
-                print("  search <query>    - Search documents")
-                print("  export <format>   - Export last results (json/md/csv)")
-                print("  bookmark <title>  - Add bookmark")
-                print("  bookmarks         - List bookmarks")
-                print("  history           - Show search history")
-                print("  stats             - Show system statistics")
-                print("  health            - Show system health")
-                print("  optimize          - Optimize performance")
-                print("  quit              - Exit mini_wiki")
+                print("Commands:")
+                print("  search <query>    Search documents")
+                print("  load <path>       Load data file")
+                print("  export <fmt>      Export results (json/md/csv)")
+                print("  bookmark <title>  Add bookmark")
+                print("  bookmarks         List bookmarks")
+                print("  history           Show search history")
+                print("  stats             System statistics")
+                print("  health            Health check")
+                print("  optimize          Optimize performance")
+                print("  quit              Exit")
                 print()
-
-            elif command.startswith("load "):
-                path = command[5:].strip()
-                print(f"Loading data from {path}...")
-                success = system.load_data(path, "auto")
-                if success:
-                    print("✓ Data loaded successfully")
-                else:
-                    print("✗ Failed to load data")
-
-            elif command.startswith("search "):
-                query = command[7:].strip()
-                print(f"Searching for '{query}'...")
-                results = system.search(query)
+            elif cmd == "search":
+                if not arg:
+                    print("Usage: search <query>")
+                    continue
+                results = system.search(arg)
                 print(f"Found {len(results)} results:")
-                for i, result in enumerate(results, 1):
-                    title = result.get("title", "Untitled")
-                    relevance = result.get("relevance", 0)
-                    print(f"  {i}. {title} (relevance: {relevance:.2f})")
-
-            elif command.startswith("export "):
-                fmt = command[7:].strip()
-                print(f"Exporting results as {fmt}...")
-                output_path = f"results.{fmt}"
-                success = system.export_results([], fmt, output_path)
-                if success:
-                    print(f"✓ Results exported to {output_path}")
-                else:
-                    print("✗ Export failed")
-
-            elif command.startswith("bookmark "):
-                title = command[9:].strip()
-                print(f"Adding bookmark '{title}'...")
-                system.add_bookmark(title, "http://example.com", "doc1")
+                for i, r in enumerate(results, 1):
+                    print(f"  {i}. {r.get('title', 'Untitled')} (relevance: {r.get('relevance', 0):.2f})")
+            elif cmd == "load":
+                if not arg:
+                    print("Usage: load <path>")
+                    continue
+                ok = system.load_data(arg, "auto")
+                print("✓ Loaded" if ok else "✗ Failed to load")
+            elif cmd == "export":
+                fmt = arg or "json"
+                out = f"results.{fmt}"
+                system.export_results([], fmt, out)
+                print(f"Exported to {out}")
+            elif cmd == "bookmark":
+                system.add_bookmark(arg or "Untitled", "http://example.com", "doc1")
                 print("✓ Bookmark added")
-
-            elif command == "bookmarks":
-                bookmarks = system.get_bookmarks()
-                print(f"Bookmarks ({len(bookmarks)}):")
-                for bookmark in bookmarks:
-                    print(f"  - {bookmark.get('title', 'Untitled')}")
-
-            elif command == "history":
-                history = system.get_search_history()
-                print(f"Search history ({len(history)} entries):")
-                for entry in history:
-                    print(f"  - {entry.get('query', 'Unknown')}")
-
-            elif command == "stats":
-                stats = system.get_statistics()
-                print("System statistics:")
-                for key, value in stats.items():
-                    print(f"  {key}: {value}")
-
-            elif command == "health":
-                health = system.health_check()
-                print(f"System status: {health['status']}")
-                for component, status in health["components"].items():
-                    print(f"  {component}: {status}")
-
-            elif command == "optimize":
+            elif cmd == "bookmarks":
+                for b in system.get_bookmarks():
+                    print(f"  - {b.get('title', 'Untitled')}")
+            elif cmd == "history":
+                for h in system.get_search_history():
+                    print(f"  - {h.get('query', '?')}")
+            elif cmd == "stats":
+                for k, v in system.get_statistics().items():
+                    print(f"  {k}: {v}")
+            elif cmd == "health":
+                h = system.health_check()
+                print(f"Status: {h['status']}")
+            elif cmd == "optimize":
                 system.optimize_performance()
-                print("✓ Performance optimized")
-
+                print("✓ Optimized")
             else:
-                print(f"Unknown command: {command}")
-                print("Type 'help' for available commands")
+                print(f"Unknown command: {cmd}. Type 'help' for commands.")
 
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
-        except Exception as e:
-            print(f"Error: {e}")
+
+
+def run_search(query, limit=10, fmt="text"):
+    """Quick search from command line"""
+    from mini_wiki.integrated_system import MiniWikiIntegratedSystem, SystemConfig
+
+    system = MiniWikiIntegratedSystem(SystemConfig())
+    results = system.search(query, limit=limit)
+
+    if fmt == "json":
+        print(json.dumps(results, indent=2))
+    else:
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "Untitled")
+            score = r.get("relevance", 0)
+            print(f"{i}. {title} (score: {score:.2f})")
 
 
 def main():
     """Main entry point"""
+    _setup_path()
+
     parser = argparse.ArgumentParser(
+        prog="mini_wiki",
         description="mini_wiki - Universal Research Assistant",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python3 mini_wiki/run_interactive.py --demo     Run demo
-  python3 mini_wiki/run_interactive.py --tui      Run TUI mode
-  python3 mini_wiki/run_interactive.py            Run interactive mode
-        """,
     )
-    parser.add_argument(
-        "--demo", action="store_true", help="Run demonstration mode"
-    )
-    parser.add_argument(
-        "--tui", action="store_true", help="Run TUI mode"
-    )
-    parser.add_argument(
-        "--config", type=str, help="Configuration file path"
-    )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Verbose output"
-    )
+    parser.add_argument("--tui", action="store_true", help="Launch interactive TUI (curses)")
+    parser.add_argument("--demo", action="store_true", help="Run demo")
+    parser.add_argument("--interactive", action="store_true", help="Interactive REPL mode")
+    parser.add_argument("command", nargs="?", help="Command: search, version")
+    parser.add_argument("args", nargs="*", help="Command arguments")
 
     args = parser.parse_args()
-
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
 
     if args.demo:
         run_demo()
     elif args.tui:
         run_tui()
+    elif args.interactive:
+        run_interactive()
+    elif args.command == "search":
+        query = " ".join(args.args) if args.args else ""
+        if not query:
+            print("Usage: mini_wiki search <query>")
+            sys.exit(1)
+        run_search(query)
+    elif args.command == "version":
+        from mini_wiki import __version__
+        print(f"mini_wiki v{__version__}")
     else:
+        # Default: launch TUI if terminal supports it, otherwise interactive
         run_interactive()
 
 

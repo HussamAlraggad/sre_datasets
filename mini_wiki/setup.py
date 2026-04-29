@@ -66,7 +66,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "mini_wiki=mini_wiki.main:cli",
+            "mini_wiki=mini_wiki.run_interactive:main",
         ],
     },
     include_package_data=True,
