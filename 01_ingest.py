@@ -5,9 +5,13 @@ Pipeline Stage 1 — Data Ingestion & FAISS Index Building
 
 What this script does
 ---------------------
-1. Reads all_reviews.csv in configurable-sized chunks (default 50 000 rows).
-2. Combines the relevant text columns (pros, cons, advice, title, job) into a
-   single review string per row — this becomes the document stored in FAISS.
+1. Reads dataset CSV in configurable-sized chunks (default 50,000 rows).
+   - Supports ANY CSV structure (not just Glassdoor)
+   - Uses dataset_config.yaml for column mapping
+   - Falls back to hardcoded defaults if no config found
+2. Combines the relevant text columns into a single document string per row
+   - This becomes the document stored in FAISS
+   - Uses CsvAdapter for flexible column handling
 3. Embeds each chunk on the GPU using HuggingFaceEmbeddings.
 4. Writes one FAISS shard file per chunk to faiss_index/shards/.
 5. Tracks progress in faiss_index/progress.json so the run can be RESUMED if
@@ -20,6 +24,16 @@ Usage
     python 01_ingest.py                  # full run / resume
     python 01_ingest.py --merge-only     # skip embedding, just re-merge shards
     python 01_ingest.py --reset          # delete progress + shards, start fresh
+    python 01_ingest.py --config dataset_config.yaml  # use custom config
+
+Configuration
+--------------
+    Place dataset_config.yaml in the project root with:
+      - csv_path: Path to your CSV file
+      - column_mappings.text_columns: List of columns to combine
+      - ingestion.chunk_size: CSV chunk size (default 50000)
+    
+    Or run: python 00_init_wizard.py
 
 Dependencies (install before running)
 --------------------------------------
@@ -55,6 +69,7 @@ from config import (
     EMBEDDING_DEVICE,
     SHARD_SIZE,
 )
+from utils import CsvAdapter, ConfigValidator
 
 # ── lazy imports (installed by user) ─────────────────────────────────────────
 def _import_faiss():
@@ -80,14 +95,53 @@ def _import_embeddings():
             sys.exit(1)
 
 
+# ── configuration loading ──────────────────────────────────────────────────────
+
+def _load_config(config_path: Path = None) -> dict:
+    """
+    Load configuration from dataset_config.yaml or use defaults.
+    
+    Args:
+        config_path: Path to dataset_config.yaml (default: dataset_config.yaml)
+    
+    Returns:
+        Configuration dictionary with keys: csv_path, text_columns, chunk_size
+    """
+    if config_path is None:
+        config_path = Path("dataset_config.yaml")
+    
+    if config_path.exists():
+        try:
+            config = ConfigValidator.load_config(config_path)
+            return {
+                "csv_path": Path(config.get("csv_path", DATASET_PATH)),
+                "text_columns": config.get("column_mappings", {}).get("text_columns", TEXT_COLUMNS),
+                "chunk_size": config.get("ingestion", {}).get("chunk_size", CSV_CHUNK_SIZE),
+            }
+        except Exception as e:
+            print(f"[WARN] Failed to load config from {config_path}: {e}")
+            print(f"[WARN] Using default configuration")
+    
+    # Fallback to defaults
+    return {
+        "csv_path": DATASET_PATH,
+        "text_columns": TEXT_COLUMNS,
+        "chunk_size": CSV_CHUNK_SIZE,
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _build_text(row: pd.Series) -> str:
-    """Combine relevant columns into a single review document string."""
+def _build_text(row: pd.Series, text_columns: list) -> str:
+    """
+    Combine relevant columns into a single document string.
+    
+    Uses CsvAdapter for flexible column handling.
+    """
     parts = []
-    for col in TEXT_COLUMNS:
+    for col in text_columns:
         val = row.get(col, "")
         if pd.notna(val) and str(val).strip():
             parts.append(f"{col.upper()}: {str(val).strip()}")
@@ -211,7 +265,7 @@ def merge_shards(faiss):
 # Main ingestion loop
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_ingest():
+def run_ingest(config: dict):
     faiss           = _import_faiss()
     HuggingFaceEmb  = _import_embeddings()
 
@@ -227,15 +281,20 @@ def run_ingest():
     completed_shards  = set(progress["completed_shards"])
     total_rows        = progress["total_rows_processed"]
 
-    print(f"[INFO] Dataset: {DATASET_PATH}")
-    print(f"[INFO] CSV chunk size: {CSV_CHUNK_SIZE:,} rows")
+    dataset_path = config["csv_path"]
+    text_columns = config["text_columns"]
+    chunk_size = config["chunk_size"]
+
+    print(f"[INFO] Dataset: {dataset_path}")
+    print(f"[INFO] Text columns: {text_columns}")
+    print(f"[INFO] CSV chunk size: {chunk_size:,} rows")
     print(f"[INFO] Already completed shards: {len(completed_shards)}")
     print(f"[INFO] Rows processed so far:    {total_rows:,}\n")
 
     shard_idx     = max(completed_shards, default=-1) + 1
     chunk_iter    = pd.read_csv(
-        DATASET_PATH,
-        chunksize=CSV_CHUNK_SIZE,
+        dataset_path,
+        chunksize=chunk_size,
         low_memory=False,
         on_bad_lines="skip",
     )
@@ -258,7 +317,7 @@ def run_ingest():
         texts    = []
         metadata = []
         for _, row in chunk_df.iterrows():
-            text = _build_text(row)
+            text = _build_text(row, text_columns)
             if text:
                 texts.append(text)
                 metadata.append({
@@ -307,7 +366,13 @@ def run_ingest():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Glassdoor RAG — Ingest pipeline")
+    parser = argparse.ArgumentParser(description="SRE-RAG — Data Ingestion Pipeline")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("dataset_config.yaml"),
+        help="Path to dataset_config.yaml (default: dataset_config.yaml)",
+    )
     parser.add_argument(
         "--merge-only",
         action="store_true",
@@ -334,10 +399,14 @@ def main():
         print("[RESET] Clean slate. Re-run without --reset to start ingestion.\n")
         return
 
+    # Load configuration
+    config = _load_config(args.config)
+    print(f"[INFO] Configuration loaded: {config}\n")
+
     faiss = _import_faiss()
 
     if not args.merge_only:
-        run_ingest()
+        run_ingest(config)
 
     merge_shards(faiss)
     print("\n[DONE] FAISS index is ready. You can now run 04_generate_srs.py.\n")
