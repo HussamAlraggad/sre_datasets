@@ -117,8 +117,11 @@ def run_demo():
 
 def run_tui():
     """Run the TUI interface using curses"""
+    from mini_wiki.integrated_system import MiniWikiIntegratedSystem, SystemConfig
     from mini_wiki.ui.tui_app import CursesTUI
-    tui = CursesTUI()
+
+    system = MiniWikiIntegratedSystem(SystemConfig())
+    tui = CursesTUI(system=system)
     tui.start()
 
 

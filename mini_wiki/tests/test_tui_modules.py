@@ -5,11 +5,12 @@ Test coverage:
 - TUI styles (themes, colors, text styles)
 - TUI components (input, selection, search, progress, table, dialog, status)
 - TUI screens (main menu, search, results, document viewer, knowledge base, settings, help)
-- TUI application (initialization, event loop, navigation, rendering)
+- TUI application (CursesTUI initialization, navigation, rendering)
 """
 
 import pytest
-from mini_wiki.ui.tui_app import TUIApplication, TUIApplicationBuilder, create_app
+from unittest.mock import MagicMock, patch
+from mini_wiki.ui.tui_app import CursesTUI, run_tui
 from mini_wiki.ui.tui_components import (
     Dialog,
     DialogConfig,
@@ -665,129 +666,158 @@ class TestScreenFactory:
 
 
 # ============================================================================
-# TUI Application Tests
+# CursesTUI Application Tests
 # ============================================================================
 
 
-class TestTUIApplication:
-    """Test TUIApplication"""
+class TestCursesTUI:
+    """Test CursesTUI — the real curses-based TUI"""
 
-    def test_tui_application_creation(self):
-        """Test TUI application creation"""
-        app = TUIApplication(title="Test App", theme_name="dark")
-        assert app.title == "Test App"
-        assert app.running is False
+    def test_tui_creation_default(self):
+        """Test CursesTUI creation with defaults"""
+        tui = CursesTUI()
+        assert tui.running is False
+        assert tui.current_menu == "main"
+        assert tui.system is None
 
-    def test_tui_application_theme(self):
-        """Test set theme"""
-        app = TUIApplication()
-        app.set_theme("light")
-        assert app.context.theme == "light"
+    def test_tui_creation_with_system(self):
+        """Test CursesTUI creation with system"""
+        mock_system = MagicMock()
+        mock_system.documents = []
+        tui = CursesTUI(system=mock_system)
+        assert tui.system is mock_system
 
-    def test_tui_application_get_theme(self):
-        """Test get theme"""
-        app = TUIApplication(theme_name="dark")
-        theme = app.get_theme()
-        assert theme.name == "dark"
+    def test_tui_initial_state(self):
+        """Test initial state"""
+        tui = CursesTUI()
+        assert tui.search_query == ""
+        assert tui.search_results == []
+        assert tui.menu_index == 0
+        assert tui.theme == "dark"
+        assert tui.results_per_page == 10
 
-    def test_tui_application_to_dict(self):
-        """Test to dict"""
-        app = TUIApplication(title="Test App")
-        app_dict = app.to_dict()
-        assert app_dict["title"] == "Test App"
-        assert "theme" in app_dict
+    def test_tui_go_to_navigation(self):
+        """Test navigation history"""
+        tui = CursesTUI()
+        assert tui.current_menu == "main"
+        assert tui.prev_menu == []
+
+        tui._go_to("search_input")
+        assert tui.current_menu == "search_input"
+        assert tui.prev_menu == ["main"]
+
+        tui._go_to("results")
+        assert tui.current_menu == "results"
+        assert tui.prev_menu == ["main", "search_input"]
+
+    def test_tui_go_back_navigation(self):
+        """Test back navigation"""
+        tui = CursesTUI()
+        tui._go_to("search_input")
+        tui._go_to("results")
+        assert tui.current_menu == "results"
+
+        tui._go_back()
+        assert tui.current_menu == "search_input"
+
+        tui._go_back()
+        assert tui.current_menu == "main"
+
+    def test_tui_show_message(self):
+        """Test message display"""
+        tui = CursesTUI()
+        tui._show_message("Test message", duration=10)
+        assert tui.message == "Test message"
+        assert tui.message_timer == 10
+
+    def test_tui_do_search_no_system(self):
+        """Test search without system"""
+        tui = CursesTUI()
+        tui.search_query = "test"
+        tui._do_search()
+        assert len(tui.search_results) > 0  # fallback results
+
+    def test_tui_do_search_with_system(self):
+        """Test search with mock system"""
+        mock_system = MagicMock()
+        mock_system.documents = [{"id": "1", "title": "Test", "content": "Test content"}]
+        mock_system.search.return_value = [
+            {"id": "1", "title": "Test", "content": "Test content", "relevance": 0.9}
+        ]
+        tui = CursesTUI(system=mock_system)
+        tui.search_query = "test"
+        tui._do_search()
+        assert len(tui.search_results) == 1
+        mock_system.search.assert_called_once()
+
+    def test_tui_do_load_with_system(self):
+        """Test load data with mock system"""
+        mock_system = MagicMock()
+        mock_system.load_data.return_value = True
+        mock_system.documents = [{"id": "1", "title": "Test"}]
+        tui = CursesTUI(system=mock_system)
+        tui.load_path = "/tmp/test.csv"
+        tui._do_load()
+        mock_system.load_data.assert_called_once()
+
+    def test_tui_do_export_with_system(self):
+        """Test export with mock system"""
+        mock_system = MagicMock()
+        mock_system.export_results.return_value = True
+        tui = CursesTUI(system=mock_system)
+        tui.search_results = [{"id": "1", "title": "Test"}]
+        tui._do_export("json")
+        mock_system.export_results.assert_called_once()
+
+    def test_tui_do_export_no_results(self):
+        """Test export with no results"""
+        tui = CursesTUI()
+        tui.search_results = []
+        tui._do_export("json")
+        # Should show message, not crash
+
+    def test_tui_main_menu_items(self):
+        """Test main menu has expected items"""
+        tui = CursesTUI()
+        menu_items = tui.menus["main"]
+        labels = [label for label, _ in menu_items]
+        assert "Load Data" in labels
+        assert "Search Documents" in labels
+        assert "View Knowledge Base" in labels
+        assert "Export Results" in labels
+        assert "Settings" in labels
+        assert "Help" in labels
+        assert "Exit" in labels
+
+    def test_tui_export_menu_items(self):
+        """Test export menu has expected items"""
+        tui = CursesTUI()
+        menu_items = tui.menus["export"]
+        labels = [label for label, _ in menu_items]
+        assert "Export as JSON" in labels
+        assert "Export as Markdown" in labels
+        assert "Export as CSV" in labels
+
+    def test_tui_settings_toggle_theme(self):
+        """Test theme toggle in settings"""
+        tui = CursesTUI()
+        assert tui.theme == "dark"
+        tui.settings_index = 0
+        tui._handle_settings_input(10)  # Enter key
+        assert tui.theme == "light"
+        tui.settings_index = 0
+        tui._handle_settings_input(10)  # Enter key again
+        assert tui.theme == "dark"
 
 
-class TestTUIApplicationBuilder:
-    """Test TUIApplicationBuilder"""
+class TestRunTUI:
+    """Test run_tui function"""
 
-    def test_builder_with_title(self):
-        """Test builder with title"""
-        app = TUIApplicationBuilder().with_title("Custom App").build()
-        assert app.title == "Custom App"
-
-    def test_builder_with_theme(self):
-        """Test builder with theme"""
-        app = TUIApplicationBuilder().with_theme("light").build()
-        assert app.context.theme == "light"
-
-    def test_builder_with_dimensions(self):
-        """Test builder with dimensions"""
-        app = TUIApplicationBuilder().with_dimensions(100, 40).build()
-        assert app.width == 100
-        assert app.height == 40
-
-    def test_builder_fluent_api(self):
-        """Test builder fluent API"""
-        app = (
-            TUIApplicationBuilder()
-            .with_title("Test")
-            .with_theme("dark")
-            .with_dimensions(80, 24)
-            .build()
-        )
-        assert app.title == "Test"
-        assert app.context.theme == "dark"
-        assert app.width == 80
-
-
-class TestCreateApp:
-    """Test create_app function"""
-
-    def test_create_app_default(self):
-        """Test create app with defaults"""
-        app = create_app()
-        assert app.title == "mini_wiki"
-        assert app.context.theme == "dark"
-
-    def test_create_app_custom(self):
-        """Test create app with custom params"""
-        app = create_app(title="Custom", theme="light", width=100, height=40)
-        assert app.title == "Custom"
-        assert app.context.theme == "light"
-        assert app.width == 100
-        assert app.height == 40
-
-
-# ============================================================================
-# Integration Tests
-# ============================================================================
-
-
-class TestTUIIntegration:
-    """Integration tests for TUI system"""
-
-    def test_theme_and_screen_integration(self):
-        """Test theme and screen integration"""
-        app = TUIApplication(theme_name="dark")
-        context = ScreenContext(current_screen=ScreenType.MAIN_MENU, theme="dark")
-        screen = ScreenFactory.create_screen(ScreenType.MAIN_MENU, context)
-        assert screen.context.theme == "dark"
-
-    def test_screen_navigation_flow(self):
-        """Test screen navigation flow"""
-        context = ScreenContext(current_screen=ScreenType.MAIN_MENU)
-        screen = MainMenuScreen(context)
-        next_screen = screen.handle_input("enter")
-        assert next_screen == ScreenType.SEARCH
-
-    def test_component_in_screen(self):
-        """Test component in screen"""
-        context = ScreenContext(current_screen=ScreenType.SEARCH)
-        screen = SearchScreen(context)
-        assert screen.search is not None
-        assert screen.input is not None
-
-    def test_full_application_initialization(self):
-        """Test full application initialization"""
-        app = (
-            TUIApplicationBuilder()
-            .with_title("mini_wiki")
-            .with_theme("dark")
-            .with_dimensions(80, 24)
-            .build()
-        )
-        assert app.title == "mini_wiki"
-        assert app.theme.name == "dark"
-        assert app.width == 80
-        assert app.height == 24
+    def test_run_tui_creates_tui(self):
+        """Test run_tui creates CursesTUI instance"""
+        with patch("mini_wiki.ui.tui_app.CursesTUI") as MockTUI:
+            mock_instance = MagicMock()
+            MockTUI.return_value = mock_instance
+            run_tui()
+            MockTUI.assert_called_once()
+            mock_instance.start.assert_called_once()

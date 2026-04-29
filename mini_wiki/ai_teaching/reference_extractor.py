@@ -262,11 +262,19 @@ class CitationExtractor:
         if not text:
             return []
 
-        # Pattern for (Author, Year) or Author (Year)
-        pattern = re.compile(r'\(([A-Z][a-z]+),?\s*(\d{4})\)')
+        # Pattern for (Author, Year) or Author (Year) or (Author Year)
+        pattern = re.compile(r'(?:([A-Z][a-z]+)\s*\((\d{4})\)|\(([A-Z][a-z]+),?\s*(\d{4})\))')
         matches = pattern.findall(text)
 
-        return [(author, int(year)) for author, year in matches]
+        results = []
+        for match in matches:
+            # match is a tuple of 4 elements: (author1, year1, author2, year2)
+            author = match[0] or match[2]
+            year = match[1] or match[3]
+            if author and year:
+                results.append((author, int(year)))
+
+        return results
 
 
 class ReferenceExtractor:

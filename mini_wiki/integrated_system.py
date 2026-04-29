@@ -1,9 +1,11 @@
 """
 Integrated System Module
-Unified mini_wiki system — NOW CONNECTED TO REAL BACKEND
+Unified mini_wiki system — FULLY CONNECTED TO REAL BACKEND
 
-Loads real CSV/JSON/JSONL/TXT files, embeds them with sentence-transformers,
+Loads real CSV/JSON/JSONL/TXT/PDF files, embeds them with sentence-transformers,
 indexes with FAISS, and searches with real semantic ranking.
+
+Bookmarks, history, and settings are persisted to ~/.mini_wiki/
 """
 
 import csv
@@ -17,13 +19,16 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Directory for persistent storage
+STORAGE_DIR = Path.home() / ".mini_wiki"
+
 
 @dataclass
 class SystemConfig:
     """System configuration"""
     data_path: str = "./data"
     index_path: str = "./index"
-    storage_path: str = "./storage"
+    storage_path: str = str(STORAGE_DIR)
     theme: str = "dark"
     max_results: int = 100
     enable_caching: bool = True
@@ -43,8 +48,51 @@ class SystemStats:
     history_entries: int = 0
 
 
+class SettingsManager:
+    """Persist user settings to ~/.mini_wiki/settings.json"""
+
+    DEFAULTS = {
+        "theme": "dark",
+        "results_per_page": 10,
+        "language": "english",
+        "auto_save": True,
+        "embedding_model": "all-MiniLM-L6-v2",
+    }
+
+    def __init__(self, path: Optional[Path] = None):
+        self.path = path or STORAGE_DIR / "settings.json"
+        self.settings: Dict[str, Any] = dict(self.DEFAULTS)
+        self._load()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.settings.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        self.settings[key] = value
+        self._save()
+
+    def _load(self) -> None:
+        try:
+            if self.path.exists():
+                data = json.loads(self.path.read_text())
+                self.settings.update(data)
+                logger.info(f"Loaded settings from {self.path}")
+        except Exception as e:
+            logger.warning(f"Failed to load settings: {e}")
+
+    def _save(self) -> None:
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(json.dumps(self.settings, indent=2))
+        except Exception as e:
+            logger.error(f"Failed to save settings: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(self.settings)
+
+
 class MiniWikiIntegratedSystem:
-    """Unified mini_wiki system — connected to real backend"""
+    """Unified mini_wiki system — connected to real backend with persistence"""
 
     def __init__(self, config: Optional[SystemConfig] = None):
         self.config = config or SystemConfig()
@@ -58,7 +106,30 @@ class MiniWikiIntegratedSystem:
         self.embedding_model = None
         self.embedding_dim = 384
 
+        # Persistent managers
+        self.settings = SettingsManager()
+        self._bookmarks_mgr = None  # lazy init
+        self._history_mgr = None    # lazy init
+
         self._initialize_components()
+
+    # ------------------------------------------------------------------
+    # Lazy-loaded persistent managers
+    # ------------------------------------------------------------------
+
+    @property
+    def bookmarks_manager(self):
+        if self._bookmarks_mgr is None:
+            from mini_wiki.advanced.bookmarks_manager import BookmarksManager
+            self._bookmarks_mgr = BookmarksManager()
+        return self._bookmarks_mgr
+
+    @property
+    def history_manager(self):
+        if self._history_mgr is None:
+            from mini_wiki.advanced.history_manager import HistoryManager
+            self._history_mgr = HistoryManager()
+        return self._history_mgr
 
     def _initialize_components(self) -> None:
         """Initialize all system components"""
@@ -74,9 +145,14 @@ class MiniWikiIntegratedSystem:
         """Load the sentence-transformers embedding model"""
         try:
             from sentence_transformers import SentenceTransformer
-            logger.info(f"Loading embedding model: {self.config.embedding_model}")
-            self.embedding_model = SentenceTransformer(self.config.embedding_model)
-            self.embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
+            model_name = self.settings.get("embedding_model", self.config.embedding_model)
+            logger.info(f"Loading embedding model: {model_name}")
+            self.embedding_model = SentenceTransformer(model_name)
+            # Handle renamed method across sentence-transformers versions
+            if hasattr(self.embedding_model, 'get_embedding_dimension'):
+                self.embedding_dim = self.embedding_model.get_embedding_dimension()
+            else:
+                self.embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
             logger.info(f"Embedding model loaded (dim={self.embedding_dim})")
         except Exception as e:
             logger.warning(f"Failed to load embedding model: {e}")
@@ -90,7 +166,7 @@ class MiniWikiIntegratedSystem:
         """Load data from a real file.
 
         Args:
-            data_source: Path to CSV, JSON, JSONL, or TXT file
+            data_source: Path to CSV, JSON, JSONL, TXT, or PDF file
             format: File format or "auto" to detect from extension
 
         Returns:
@@ -98,7 +174,8 @@ class MiniWikiIntegratedSystem:
         """
         try:
             start_time = time.time()
-            path = Path(data_source)
+            # Expand ~ to home directory
+            path = Path(os.path.expanduser(data_source))
 
             if not path.exists():
                 logger.error(f"File not found: {data_source}")
@@ -117,6 +194,8 @@ class MiniWikiIntegratedSystem:
                 records = self._load_jsonl(path)
             elif format in ("txt", "text"):
                 records = self._load_txt(path)
+            elif format == "pdf":
+                records = self._load_pdf(path)
             else:
                 logger.error(f"Unsupported format: {format}")
                 return False
@@ -251,6 +330,58 @@ class MiniWikiIntegratedSystem:
             })
         return records
 
+    def _load_pdf(self, path: Path) -> List[Dict[str, Any]]:
+        """Load PDF file using PyPDF2 or pdfplumber"""
+        records = []
+
+        # Try pdfplumber first (better extraction)
+        try:
+            import pdfplumber
+            with pdfplumber.open(path) as pdf:
+                for i, page in enumerate(pdf.pages):
+                    text = page.extract_text()
+                    if text and text.strip():
+                        title = text[:100].replace("\n", " ") + ("..." if len(text) > 100 else "")
+                        records.append({
+                            "id": f"doc_{len(self.documents) + i}",
+                            "title": f"Page {i+1}: {title}",
+                            "content": text,
+                            "source": str(path.name),
+                            "date": time.strftime("%Y-%m-%d"),
+                            "tags": ["pdf", f"page_{i+1}"],
+                        })
+            if records:
+                return records
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"pdfplumber failed: {e}")
+
+        # Fallback to PyPDF2
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(str(path))
+            for i, page in enumerate(reader.pages):
+                text = page.extract_text()
+                if text and text.strip():
+                    title = text[:100].replace("\n", " ") + ("..." if len(text) > 100 else "")
+                    records.append({
+                        "id": f"doc_{len(self.documents) + i}",
+                        "title": f"Page {i+1}: {title}",
+                        "content": text,
+                        "source": str(path.name),
+                        "date": time.strftime("%Y-%m-%d"),
+                        "tags": ["pdf", f"page_{i+1}"],
+                    })
+        except ImportError:
+            logger.error("No PDF library available. Install pdfplumber or PyPDF2.")
+            raise ImportError("No PDF library available. Install with: pip install pdfplumber")
+        except Exception as e:
+            logger.error(f"PDF loading failed: {e}")
+            raise
+
+        return records
+
     def _embed_records(self, records: List[Dict[str, Any]]) -> None:
         """Generate embeddings for records"""
         if not self.embedding_model or not records:
@@ -351,6 +482,15 @@ class MiniWikiIntegratedSystem:
 
                 self.stats.total_searches += 1
                 self.stats.search_time_ms = (time.time() - start_time) * 1000
+
+                # Record search in history
+                self.history_manager.add_search(
+                    query=query,
+                    results_count=len(results),
+                    duration_ms=self.stats.search_time_ms,
+                )
+                self.stats.history_entries = len(self.history_manager.history)
+
                 logger.info(f"Found {len(results)} results in {self.stats.search_time_ms:.1f}ms")
                 return results
 
@@ -363,6 +503,7 @@ class MiniWikiIntegratedSystem:
 
     def _keyword_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
         """Simple keyword-based search as fallback"""
+        self.stats.total_searches += 1
         query_lower = query.lower()
         query_terms = query_lower.split()
 
@@ -382,6 +523,7 @@ class MiniWikiIntegratedSystem:
 
     def _fallback_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
         """Fallback when no documents are loaded"""
+        self.stats.total_searches += 1
         return [
             {
                 "id": f"doc_{i}",
@@ -438,19 +580,47 @@ class MiniWikiIntegratedSystem:
     # Bookmarks, History, Stats, Health — REAL
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Bookmarks — REAL (persisted to ~/.mini_wiki/bookmarks.json)
+    # ------------------------------------------------------------------
+
     def add_bookmark(self, title: str, url: str, document_id: str, tags: Optional[List[str]] = None) -> bool:
-        self.stats.bookmarks_count += 1
-        logger.info(f"Added bookmark: {title}")
-        return True
+        """Add a bookmark (persisted to disk)"""
+        try:
+            bookmark = self.bookmarks_manager.add_bookmark(title, url, document_id, tags)
+            self.stats.bookmarks_count = len(self.bookmarks_manager.list_bookmarks())
+            logger.info(f"Added bookmark: {title}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add bookmark: {e}")
+            return False
 
     def get_bookmarks(self) -> List[Dict[str, Any]]:
-        return []
+        """Get all bookmarks (from persistent storage)"""
+        bookmarks = self.bookmarks_manager.list_bookmarks()
+        return [b.to_dict() for b in bookmarks]
+
+    def remove_bookmark(self, bookmark_id: str) -> bool:
+        """Remove a bookmark by ID"""
+        return self.bookmarks_manager.remove_bookmark(bookmark_id)
+
+    # ------------------------------------------------------------------
+    # History — REAL (persisted to ~/.mini_wiki/history.json)
+    # ------------------------------------------------------------------
 
     def get_search_history(self, limit: int = 20) -> List[Dict[str, Any]]:
-        return []
+        """Get search history (from persistent storage)"""
+        entries = self.history_manager.get_history(limit=limit)
+        return [e.to_dict() for e in entries]
+
+    def clear_search_history(self) -> None:
+        """Clear all search history"""
+        self.history_manager.clear_history()
 
     def get_recent_items(self, limit: int = 10) -> List[Dict[str, Any]]:
-        return []
+        """Get recently accessed items (from persistent storage)"""
+        items = self.history_manager.get_recent_items(limit=limit)
+        return [i.to_dict() for i in items]
 
     def batch_export(self, items: List[Dict[str, Any]], format: str, output_path: str) -> bool:
         return self.export_results(items, format, output_path)
@@ -460,10 +630,12 @@ class MiniWikiIntegratedSystem:
             "total_documents": self.stats.total_documents,
             "total_embeddings": self.stats.total_embeddings,
             "index_size_mb": self.stats.index_size_mb,
-            "search_time_ms": self.stats.search_time_ms,
+            "search_time_ms": round(self.stats.search_time_ms, 1),
             "total_searches": self.stats.total_searches,
-            "bookmarks_count": self.stats.bookmarks_count,
-            "history_entries": self.stats.history_entries,
+            "bookmarks_count": len(self.bookmarks_manager.list_bookmarks()),
+            "history_entries": len(self.history_manager.history),
+            "embedding_model": self.config.embedding_model,
+            "index_built": self.index is not None,
         }
 
     def optimize_performance(self) -> bool:

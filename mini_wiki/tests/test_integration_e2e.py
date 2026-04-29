@@ -11,6 +11,7 @@ Test coverage:
 - Integrated system (Phase 6)
 """
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -46,33 +47,73 @@ class TestIntegratedSystemCreation:
     def test_system_initialization(self):
         """Test system initialization"""
         system = create_system()
-        assert system.datasets is not None
+        assert system.documents is not None
         assert system.stats is not None
         assert system.cache is not None
+        assert system.settings is not None
 
 
 class TestDataLoading:
     """Test data loading (Phase 1)"""
 
     def test_load_data_csv(self):
-        """Test load CSV data"""
-        system = create_system()
-        result = system.load_data("test.csv", "csv")
-        assert result is True
-        assert "test.csv" in system.datasets
+        """Test load CSV data from real file"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write("title,content,source\n")
+            f.write("Test Doc,This is test content,test_source\n")
+            f.write("Another Doc,More content here,another_source\n")
+            csv_path = f.name
+
+        try:
+            system = create_system()
+            result = system.load_data(csv_path, "csv")
+            assert result is True
+            assert len(system.documents) >= 2
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
 
     def test_load_data_json(self):
-        """Test load JSON data"""
-        system = create_system()
-        result = system.load_data("test.json", "json")
-        assert result is True
+        """Test load JSON data from real file"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump([
+                {"title": "Test", "content": "Test content"},
+                {"title": "Another", "content": "More content"},
+            ], f)
+            json_path = f.name
+
+        try:
+            system = create_system()
+            result = system.load_data(json_path, "json")
+            assert result is True
+            assert len(system.documents) >= 2
+        finally:
+            Path(json_path).unlink(missing_ok=True)
 
     def test_load_data_multiple(self):
         """Test load multiple data sources"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f1:
+            f1.write("title,content\n")
+            f1.write("Doc1,Content1\n")
+            csv_path = f1.name
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump([{"title": "Doc2", "content": "Content2"}], f2)
+            json_path = f2.name
+
+        try:
+            system = create_system()
+            system.load_data(csv_path, "csv")
+            system.load_data(json_path, "json")
+            assert len(system.documents) >= 2
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
+            Path(json_path).unlink(missing_ok=True)
+
+    def test_load_data_nonexistent_file(self):
+        """Test load data from nonexistent file"""
         system = create_system()
-        system.load_data("data1.csv", "csv")
-        system.load_data("data2.json", "json")
-        assert len(system.datasets) == 2
+        result = system.load_data("/nonexistent/file.csv", "csv")
+        assert result is False
 
 
 class TestSearchAndRanking:
@@ -100,12 +141,16 @@ class TestSearchAndRanking:
             relevances = [r.get("relevance", 0) for r in results]
             assert relevances == sorted(relevances, reverse=True)
 
-    def test_search_includes_context(self):
-        """Test search results include context"""
+    def test_search_includes_content(self):
+        """Test search results include content"""
         system = create_system()
         results = system.search("test")
         if results:
-            assert "context" in results[0]
+            # Results should have at least id, title, content, relevance
+            assert "id" in results[0]
+            assert "title" in results[0]
+            assert "content" in results[0]
+            assert "relevance" in results[0]
 
 
 class TestExport:
@@ -147,20 +192,22 @@ class TestBookmarks:
     def test_add_bookmark(self):
         """Test add bookmark"""
         system = create_system()
+        initial_count = len(system.bookmarks_manager.list_bookmarks())
         success = system.add_bookmark(
             title="Test",
             url="http://example.com",
             document_id="doc1",
         )
         assert success is True
-        assert system.stats.bookmarks_count == 1
+        assert len(system.bookmarks_manager.list_bookmarks()) == initial_count + 1
 
     def test_add_multiple_bookmarks(self):
         """Test add multiple bookmarks"""
         system = create_system()
+        initial_count = len(system.bookmarks_manager.list_bookmarks())
         system.add_bookmark("Test 1", "http://example.com/1", "doc1")
         system.add_bookmark("Test 2", "http://example.com/2", "doc2")
-        assert system.stats.bookmarks_count == 2
+        assert len(system.bookmarks_manager.list_bookmarks()) == initial_count + 2
 
     def test_get_bookmarks(self):
         """Test get bookmarks"""
@@ -195,7 +242,6 @@ class TestStatistics:
     def test_get_statistics(self):
         """Test get statistics"""
         system = create_system()
-        system.load_data("test.csv", "csv")
         system.search("test")
         system.add_bookmark("Test", "http://example.com", "doc1")
 
@@ -267,13 +313,18 @@ class TestCompleteWorkflow:
     def test_load_search_export_workflow(self):
         """Test load, search, export workflow"""
         with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a test CSV file
+            csv_path = Path(tmpdir) / "test.csv"
+            csv_path.write_text("title,content,source\nDoc1,Content1,src1\nDoc2,Content2,src2\n")
+
             system = create_system()
 
             # Phase 1: Load data
-            system.load_data("test.csv", "csv")
+            system.load_data(str(csv_path), "csv")
+            assert len(system.documents) >= 2
 
             # Phase 2: Search
-            results = system.search("machine learning", limit=5)
+            results = system.search("Content", limit=5)
             assert len(results) > 0
 
             # Phase 5: Export
@@ -291,9 +342,9 @@ class TestCompleteWorkflow:
         # Phase 5: Bookmark
         if results:
             system.add_bookmark(
-                title=results[0].get("title"),
+                title=results[0].get("title", "Untitled"),
                 url="http://example.com",
-                document_id=results[0].get("id"),
+                document_id=results[0].get("id", "doc1"),
             )
 
         # Phase 5: Check history
@@ -307,6 +358,13 @@ class TestCompleteWorkflow:
     def test_full_system_workflow(self):
         """Test full system workflow"""
         with tempfile.TemporaryDirectory() as tmpdir:
+            # Create test data files
+            csv_path = Path(tmpdir) / "data1.csv"
+            csv_path.write_text("title,content\nDoc1,Content1\n")
+
+            json_path = Path(tmpdir) / "data2.json"
+            json_path.write_text(json.dumps([{"title": "Doc2", "content": "Content2"}]))
+
             config = SystemConfig(
                 data_path=str(Path(tmpdir) / "data"),
                 storage_path=str(Path(tmpdir) / "storage"),
@@ -314,11 +372,11 @@ class TestCompleteWorkflow:
             system = create_system(config)
 
             # Load data
-            system.load_data("data1.csv", "csv")
-            system.load_data("data2.json", "json")
+            system.load_data(str(csv_path), "csv")
+            system.load_data(str(json_path), "json")
 
             # Search
-            results = system.search("test", limit=10)
+            results = system.search("Content", limit=10)
 
             # Bookmark
             if results:

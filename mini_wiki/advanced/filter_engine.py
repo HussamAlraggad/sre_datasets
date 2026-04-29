@@ -217,6 +217,10 @@ class FilterEngine:
         Returns:
             Filtered items
         """
+        # If no date filters are active, pass all items through
+        if not criteria.min_date and not criteria.max_date:
+            return items
+
         filtered = []
         for item in items:
             date_str = item.get("date")

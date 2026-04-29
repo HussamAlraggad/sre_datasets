@@ -382,10 +382,11 @@ class KnowledgeBase:
                 yaml.dump(entry.to_dict(), f, default_flow_style=False)
 
             # Add to index
+            metadata = data.get("metadata") or {}
             self.index[entry_id] = {
                 "topic": data.get("topic", ""),
-                "tags": data.get("metadata", {}).get("tags", []),
-                "difficulty": data.get("metadata", {}).get("difficulty", "intermediate"),
+                "tags": metadata.get("tags", []),
+                "difficulty": metadata.get("difficulty", "intermediate"),
                 "created_at": data.get("created_at", datetime.now().isoformat()),
                 "updated_at": datetime.now().isoformat(),
                 "path": str(entry_path),
