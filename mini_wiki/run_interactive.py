@@ -42,52 +42,73 @@ def run_demo():
     print("=" * 60)
     print()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config = SystemConfig(
-            data_path=str(Path(tmpdir) / "data"),
-            index_path=str(Path(tmpdir) / "index"),
-            storage_path=str(Path(tmpdir) / "storage"),
-        )
-        system = MiniWikiIntegratedSystem(config)
+    # Find sample datasets to load — search multiple locations
+    script_dir = Path(__file__).resolve().parent
+    project_dir = script_dir.parent  # mini_wiki/ -> datasets/
+    parent_dir = project_dir.parent   # datasets/ -> software_requirements_engineering/
+    sample_datasets = [
+        parent_dir / "research" / "flashcards.csv",
+        parent_dir / "study_arena" / "ch1_flashcards_01.csv",
+        project_dir / "research" / "flashcards.csv",
+        project_dir / "study_arena" / "ch1_flashcards_01.csv",
+        # Also try relative to CWD
+        Path.cwd() / "research" / "flashcards.csv",
+    ]
 
-        # 1. Load data
-        print("1. Loading sample data...")
-        system.load_data("sample_documents.csv", "csv")
-        print("   ✓ Data loaded")
-        print()
+    system = MiniWikiIntegratedSystem(SystemConfig())
 
-        # 2. Search
-        print("2. Searching for 'machine learning'...")
-        results = system.search("machine learning", limit=5)
-        print(f"   Found {len(results)} results:")
-        for i, r in enumerate(results, 1):
-            print(f"   {i}. {r.get('title', 'Untitled')} (relevance: {r.get('relevance', 0):.2f})")
-        print()
+    # 1. Load data
+    print("1. Loading data...")
+    loaded = False
+    for ds in sample_datasets:
+        if ds.exists():
+            ok = system.load_data(str(ds), "csv")
+            if ok:
+                print(f"   ✓ Loaded {ds.name} ({system.stats.total_documents} documents)")
+                loaded = True
+                break
+    if not loaded:
+        print("   No sample datasets found — using fallback mode")
+    print()
 
-        # 3. Export
-        print("3. Exporting results...")
-        out = str(Path(tmpdir) / "results.json")
-        system.export_results(results, "json", out)
-        print(f"   ✓ Exported to {out}")
-        print()
+    # 2. Search
+    print("2. Searching for 'agentic AI'...")
+    results = system.search("agentic AI", limit=5)
+    print(f"   Found {len(results)} results:")
+    for i, r in enumerate(results, 1):
+        title = r.get('title', 'Untitled')[:70]
+        score = r.get('relevance', 0)
+        print(f"   {i}. [{score:.3f}] {title}")
+    print()
 
-        # 4. Bookmarks
-        print("4. Adding bookmark...")
-        system.add_bookmark("Important Paper", "http://example.com", "doc1", ["ml"])
-        print("   ✓ Bookmark added")
-        print()
+    # 3. Export
+    print("3. Exporting results...")
+    out = "/tmp/mini_wiki_results.json"
+    system.export_results(results, "json", out)
+    print(f"   ✓ Exported to {out}")
+    print()
 
-        # 5. Stats
-        print("5. System statistics...")
-        stats = system.get_statistics()
-        print(f"   Searches: {stats['total_searches']}, Bookmarks: {stats['bookmarks_count']}")
-        print()
+    # 4. Bookmarks
+    print("4. Adding bookmark...")
+    if results:
+        system.add_bookmark(results[0].get('title', 'Untitled')[:50], "http://example.com", "doc1", ["ai"])
+    print("   ✓ Bookmark added")
+    print()
 
-        # 6. Health
-        print("6. Health check...")
-        health = system.health_check()
-        print(f"   Status: {health['status']}")
-        print()
+    # 5. Stats
+    print("5. System statistics...")
+    stats = system.get_statistics()
+    print(f"   Documents: {stats['total_documents']}, Searches: {stats['total_searches']}, Bookmarks: {stats['bookmarks_count']}")
+    print()
+
+    # 6. Health
+    print("6. Health check...")
+    health = system.health_check()
+    print(f"   Status: {health['status']}")
+    print(f"   Documents loaded: {health['documents_loaded']}")
+    print(f"   Embedding model: {health['embedding_model']}")
+    print(f"   Index built: {health['index_built']}")
+    print()
 
     print("=" * 60)
     print("  Demo completed!")
