@@ -9,7 +9,7 @@ Modules:
 - tui_app: Main application controller and event loop
 """
 
-from mini_wiki.ui.tui_app import TUIApplication, TUIApplicationBuilder, create_app
+from mini_wiki.ui.tui_app import CursesTUI, run_tui
 from mini_wiki.ui.tui_components import (
     Dialog,
     DialogConfig,
@@ -52,9 +52,8 @@ from mini_wiki.ui.tui_styles import (
 
 __all__ = [
     # Application
-    "TUIApplication",
-    "TUIApplicationBuilder",
-    "create_app",
+    "CursesTUI",
+    "run_tui",
     # Styles
     "Color",
     "ColorScheme",

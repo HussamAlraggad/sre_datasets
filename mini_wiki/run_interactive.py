@@ -139,42 +139,17 @@ def run_demo():
 
 
 def run_tui():
-    """Run the TUI interface"""
-    print("Starting mini_wiki TUI...")
-    print()
-
+    """Run the TUI interface using curses"""
     try:
-        from mini_wiki.ui.tui_app import create_app
-
-        app = create_app(title="mini_wiki", theme="dark", width=80, height=24)
-        print("TUI initialized. Use arrow keys to navigate, Enter to select, Q to quit.")
-        print("Note: Full TUI requires a terminal with cursor support.")
-        print()
-        print("For the full interactive experience, run:")
-        print("  python3 -m mini_wiki.ui.tui_app")
-        print()
-
-        # Show menu options
-        print("=" * 50)
-        print("  mini_wiki - Universal Research Assistant")
-        print("=" * 50)
-        print()
-        print("  Main Menu:")
-        print()
-        print("  1. Search Documents")
-        print("  2. View Knowledge Base")
-        print("  3. Recent Searches")
-        print("  4. Settings")
-        print("  5. Help")
-        print("  6. Exit")
-        print()
-        print("  Use ↑/↓ to navigate, Enter to select, Q to quit")
-        print()
-
+        from mini_wiki.ui.tui_app import CursesTUI
+        tui = CursesTUI()
+        tui.start()
     except ImportError as e:
         print(f"TUI dependencies not available: {e}")
-        print("Install dependencies with: pip install textual rich")
-        print()
+        print("Falling back to interactive mode...")
+        run_interactive()
+    except Exception as e:
+        print(f"TUI error: {e}")
         print("Falling back to interactive mode...")
         run_interactive()
 

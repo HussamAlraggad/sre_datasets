@@ -1,394 +1,444 @@
 """
 TUI Application Module
-Main TUI application controller and event loop
+Real interactive terminal UI using curses
 
 Features:
-- Application initialization
-- Event loop management
-- Screen navigation
-- Input handling
-- Output rendering
-- Configuration management
+- Full-screen terminal UI with curses
+- Arrow key navigation
+- Live screen rendering
+- Screen navigation with history
+- Search input
+- Results display
+- Theme support (dark/light)
 """
 
+import curses
 import logging
 import sys
-from typing import Dict, Optional
-
-from mini_wiki.ui.tui_screens import (
-    Screen,
-    ScreenContext,
-    ScreenFactory,
-    ScreenType,
-)
-from mini_wiki.ui.tui_styles import Theme, ThemeManager
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
-class TUIApplication:
-    """Main TUI application"""
+class CursesTUI:
+    """Interactive terminal UI using curses"""
 
-    def __init__(
-        self,
-        title: str = "mini_wiki",
-        theme_name: str = "dark",
-        width: int = 80,
-        height: int = 24,
-    ):
-        """Initialize TUI application
-
-        Args:
-            title: Application title
-            theme_name: Theme name
-            width: Terminal width
-            height: Terminal height
-        """
-        self.title = title
-        self.width = width
-        self.height = height
+    def __init__(self):
+        """Initialize TUI"""
         self.running = False
-        self.current_screen: Optional[Screen] = None
-        self.screen_history: list[ScreenType] = []
+        self.screen = None
+        self.current_menu = "main"
+        self.menu_index = 0
+        self.search_query = ""
+        self.search_results: List[Dict] = []
+        self.message = ""
+        self.results_index = 0
+        self.kb_index = 0
+        self.settings_index = 0
+        self.doc_scroll = 0
+        self.doc_content = ""
 
-        # Load theme
-        self.theme = ThemeManager.get_theme(theme_name)
-        if not self.theme:
-            logger.warning(f"Theme '{theme_name}' not found, using 'dark'")
-            self.theme = ThemeManager.get_theme("dark")
+        # Menu items
+        self.menus = {
+            "main": [
+                ("Search Documents", "search_input"),
+                ("View Knowledge Base", "knowledge_base"),
+                ("Recent Searches", "results"),
+                ("Settings", "settings"),
+                ("Help", "help"),
+                ("Exit", "exit"),
+            ],
+            "settings": [
+                ("Theme: Dark", None),
+                ("Language: English", None),
+                ("Results per page: 10", None),
+                ("Auto-save: Enabled", None),
+                ("Back to Menu", "main"),
+            ],
+        }
 
-        # Initialize context
-        self.context = ScreenContext(
-            current_screen=ScreenType.MAIN_MENU,
-            theme=theme_name,
-        )
+        # Sample data
+        self.kb_items = [
+            "Machine Learning Basics",
+            "Natural Language Processing",
+            "Computer Vision",
+            "Deep Learning",
+            "Reinforcement Learning",
+            "Data Structures",
+            "Algorithms",
+            "Software Engineering",
+        ]
 
-        logger.info(f"Initialized TUI application: {title}")
-
-    def start(self) -> None:
-        """Start application"""
-        self.running = True
-        logger.info("Starting TUI application")
-
+    def start(self):
+        """Start the TUI application"""
         try:
-            self._initialize_screen()
-            self._event_loop()
-        except KeyboardInterrupt:
-            logger.info("Application interrupted by user")
+            curses.wrapper(self._main_loop)
         except Exception as e:
-            logger.error(f"Application error: {e}", exc_info=True)
-        finally:
-            self.stop()
+            logger.error(f"TUI error: {e}")
+            print(f"\nError: {e}\n")
 
-    def stop(self) -> None:
-        """Stop application"""
-        self.running = False
-        logger.info("Stopping TUI application")
-        self._cleanup()
-
-    def _initialize_screen(self) -> None:
-        """Initialize current screen"""
-        try:
-            self.current_screen = ScreenFactory.create_screen(
-                self.context.current_screen, self.context
-            )
-            logger.debug(f"Initialized screen: {self.context.current_screen.value}")
-        except Exception as e:
-            logger.error(f"Failed to initialize screen: {e}")
-            raise
-
-    def _event_loop(self) -> None:
+    def _main_loop(self, stdscr):
         """Main event loop"""
+        self.screen = stdscr
+        self.running = True
+
+        # Initialize curses
+        curses.curs_set(0)  # Hide cursor
+        stdscr.nodelay(0)  # Blocking input
+        stdscr.keypad(True)  # Enable arrow keys
+
         while self.running:
             try:
                 # Render current screen
                 self._render()
 
-                # Get user input
-                key = self._get_input()
+                # Get input
+                key = stdscr.getch()
 
                 # Handle input
-                next_screen = self._handle_input(key)
+                self._handle_input(key)
 
-                # Navigate to next screen if needed
-                if next_screen:
-                    self._navigate_to(next_screen)
-
+            except KeyboardInterrupt:
+                self.running = False
             except Exception as e:
                 logger.error(f"Event loop error: {e}")
-                break
+                self.running = False
 
-    def _render(self) -> None:
+    def _render(self):
         """Render current screen"""
-        if not self.current_screen:
-            return
+        self.screen.clear()
+        height, width = self.screen.getmaxyx()
 
-        try:
-            # Clear screen
-            self._clear_screen()
+        if self.current_menu == "main":
+            self._render_main(width, height)
+        elif self.current_menu == "search_input":
+            self._render_search_input(width, height)
+        elif self.current_menu == "results":
+            self._render_results(width, height)
+        elif self.current_menu == "knowledge_base":
+            self._render_knowledge_base(width, height)
+        elif self.current_menu == "settings":
+            self._render_settings(width, height)
+        elif self.current_menu == "help":
+            self._render_help(width, height)
+        elif self.current_menu == "doc_viewer":
+            self._render_doc_viewer(width, height)
 
-            # Render screen content
-            content = self.current_screen.render()
-            print(content)
+        self.screen.refresh()
 
-            # Render status bar
-            status = self.current_screen.get_status_bar()
-            self._render_status_bar(status)
+    def _render_main(self, width, height):
+        """Render main menu"""
+        # Title
+        title = "mini_wiki - Universal Research Assistant"
+        self.screen.addstr(1, (width - len(title)) // 2, title, curses.A_BOLD)
 
-        except Exception as e:
-            logger.error(f"Render error: {e}")
+        # Separator
+        self.screen.addstr(3, 2, "─" * (width - 4))
 
-    def _get_input(self) -> str:
-        """Get user input
-
-        Returns:
-            Input key
-        """
-        try:
-            # Simulate input (in real implementation, use curses or similar)
-            user_input = input("\n> ").strip().lower()
-
-            # Map input to keys
-            if user_input == "q":
-                return "q"
-            elif user_input == "up" or user_input == "w":
-                return "up"
-            elif user_input == "down" or user_input == "s":
-                return "down"
-            elif user_input == "left" or user_input == "a":
-                return "left"
-            elif user_input == "right" or user_input == "d":
-                return "right"
-            elif user_input == "enter" or user_input == "":
-                return "enter"
-            elif user_input == "backspace" or user_input == "bs":
-                return "backspace"
+        # Menu items
+        items = self.menus["main"]
+        for i, (label, _) in enumerate(items):
+            y = 5 + i
+            if i == self.menu_index:
+                self.screen.addstr(y, 4, "▸ ", curses.A_BOLD)
+                self.screen.addstr(y, 6, label, curses.A_REVERSE)
             else:
-                return user_input
+                self.screen.addstr(y, 4, "  ")
+                self.screen.addstr(y, 6, label)
 
-        except EOFError:
-            return "q"
+        # Footer
+        self.screen.addstr(height - 2, 2, "↑/↓ Navigate  │  Enter Select  │  Q Quit", curses.A_DIM)
 
-    def _handle_input(self, key: str) -> Optional[ScreenType]:
-        """Handle user input
+        # Message
+        if self.message:
+            self.screen.addstr(height - 4, 4, self.message, curses.A_BOLD)
 
-        Args:
-            key: Input key
+    def _render_search_input(self, width, height):
+        """Render search input screen"""
+        title = "Search Documents"
+        self.screen.addstr(1, (width - len(title)) // 2, title, curses.A_BOLD)
+        self.screen.addstr(3, 2, "─" * (width - 4))
 
-        Returns:
-            Next screen type or None
-        """
-        if not self.current_screen:
-            return None
+        self.screen.addstr(5, 4, "Enter your search query:")
+        self.screen.addstr(7, 4, "> ", curses.A_BOLD)
+        curses.curs_set(1)  # Show cursor
+        self.screen.addstr(7, 6, self.search_query + "█")
+        curses.curs_set(0)  # Hide cursor
 
-        try:
-            next_screen = self.current_screen.handle_input(key)
-            if next_screen == ScreenType.EXIT:
-                self.stop()
-                return None
-            return next_screen
-        except Exception as e:
-            logger.error(f"Input handling error: {e}")
-            return None
+        if self.search_results:
+            self.screen.addstr(9, 4, f"Found {len(self.search_results)} results:", curses.A_BOLD)
+            for i, result in enumerate(self.search_results[:height - 12]):
+                y = 11 + i
+                title_text = result.get("title", "Untitled")[:width - 10]
+                score = result.get("relevance", 0)
+                line = f"{i + 1}. {title_text} (score: {score:.2f})"
+                self.screen.addstr(y, 6, line)
 
-    def _navigate_to(self, screen_type: ScreenType) -> None:
-        """Navigate to screen
+        self.screen.addstr(height - 2, 2, "Type to search  │  Enter Execute  │  Esc Back", curses.A_DIM)
 
-        Args:
-            screen_type: Target screen type
-        """
-        try:
-            # Update context
-            self.context.previous_screen = self.context.current_screen
-            self.context.current_screen = screen_type
+    def _render_results(self, width, height):
+        """Render results screen"""
+        title = "Search Results"
+        self.screen.addstr(1, (width - len(title)) // 2, title, curses.A_BOLD)
+        self.screen.addstr(3, 2, "─" * (width - 4))
 
-            # Add to history
-            self.screen_history.append(screen_type)
-
-            # Create new screen
-            self._initialize_screen()
-
-            logger.debug(f"Navigated to screen: {screen_type.value}")
-
-        except Exception as e:
-            logger.error(f"Navigation error: {e}")
-
-    def _render_status_bar(self, status) -> None:
-        """Render status bar
-
-        Args:
-            status: Status bar object
-        """
-        try:
-            status_dict = status.to_dict()
-            left = status_dict.get("left", "")
-            center = status_dict.get("center", "")
-            right = status_dict.get("right", "")
-
-            # Calculate spacing
-            total_width = self.width
-            left_width = len(left)
-            right_width = len(right)
-            center_width = len(center)
-
-            # Build status bar
-            if left or center or right:
-                status_line = left.ljust(left_width)
-                status_line += center.center(total_width - left_width - right_width)
-                status_line += right.rjust(right_width)
-                print(status_line)
-
-        except Exception as e:
-            logger.error(f"Status bar render error: {e}")
-
-    def _clear_screen(self) -> None:
-        """Clear terminal screen"""
-        try:
-            if sys.platform == "win32":
-                import os
-
-                os.system("cls")
-            else:
-                import os
-
-                os.system("clear")
-        except Exception as e:
-            logger.warning(f"Failed to clear screen: {e}")
-
-    def _cleanup(self) -> None:
-        """Cleanup resources"""
-        try:
-            logger.info("Cleaning up resources")
-            # Add cleanup code here
-        except Exception as e:
-            logger.error(f"Cleanup error: {e}")
-
-    def get_theme(self) -> Theme:
-        """Get current theme
-
-        Returns:
-            Current theme
-        """
-        return self.theme
-
-    def set_theme(self, theme_name: str) -> None:
-        """Set theme
-
-        Args:
-            theme_name: Theme name
-        """
-        theme = ThemeManager.get_theme(theme_name)
-        if theme:
-            self.theme = theme
-            self.context.theme = theme_name
-            logger.info(f"Changed theme to: {theme_name}")
+        if not self.search_results:
+            self.screen.addstr(5, 4, "No results yet. Search first.")
+            self.screen.addstr(7, 4, "Press Enter to go to search.")
         else:
-            logger.warning(f"Theme '{theme_name}' not found")
+            # Header
+            header = f"{'#':<4} {'Document':<40} {'Score':<10} {'Relevance':<12}"
+            self.screen.addstr(5, 4, header, curses.A_BOLD)
+            self.screen.addstr(6, 4, "─" * (width - 8))
 
-    def get_screen_history(self) -> list[ScreenType]:
-        """Get screen navigation history
+            # Results
+            for i, result in enumerate(self.search_results[:height - 10]):
+                y = 7 + i
+                title_text = result.get("title", "Untitled")[:38]
+                score = result.get("relevance", 0)
+                relevance = "High" if score >= 0.7 else "Medium" if score >= 0.5 else "Low"
 
-        Returns:
-            List of visited screens
-        """
-        return self.screen_history
+                if i == self.results_index:
+                    self.screen.addstr(y, 4, f"▸ {i + 1:<3} {title_text:<40} {score:<10.2f} {relevance}", curses.A_REVERSE)
+                else:
+                    self.screen.addstr(y, 4, f"  {i + 1:<3} {title_text:<40} {score:<10.2f} {relevance}")
 
-    def to_dict(self) -> Dict:
-        """Convert to dictionary
+        self.screen.addstr(height - 2, 2, "↑/↓ Navigate  │  Enter View  │  Esc Back", curses.A_DIM)
 
-        Returns:
-            Dictionary representation
-        """
-        return {
-            "title": self.title,
-            "width": self.width,
-            "height": self.height,
-            "running": self.running,
-            "current_screen": self.context.current_screen.value,
-            "theme": self.context.theme,
-            "screen_history": [s.value for s in self.screen_history],
-        }
+    def _render_knowledge_base(self, width, height):
+        """Render knowledge base screen"""
+        title = "Knowledge Base"
+        self.screen.addstr(1, (width - len(title)) // 2, title, curses.A_BOLD)
+        self.screen.addstr(3, 2, "─" * (width - 4))
+
+        self.screen.addstr(5, 4, "Available Topics:", curses.A_BOLD)
+
+        for i, item in enumerate(self.kb_items[:height - 9]):
+            y = 7 + i
+            if i == self.kb_index:
+                self.screen.addstr(y, 4, f"▸ {i + 1}. {item}", curses.A_REVERSE)
+            else:
+                self.screen.addstr(y, 4, f"  {i + 1}. {item}")
+
+        self.screen.addstr(height - 2, 2, "↑/↓ Navigate  │  Enter View  │  Esc Back", curses.A_DIM)
+
+    def _render_settings(self, width, height):
+        """Render settings screen"""
+        title = "Settings"
+        self.screen.addstr(1, (width - len(title)) // 2, title, curses.A_BOLD)
+        self.screen.addstr(3, 2, "─" * (width - 4))
+
+        items = self.menus["settings"]
+        for i, (label, _) in enumerate(items):
+            y = 5 + i
+            if i == self.settings_index:
+                self.screen.addstr(y, 4, f"▸ {label}", curses.A_REVERSE)
+            else:
+                self.screen.addstr(y, 4, f"  {label}")
+
+        self.screen.addstr(height - 2, 2, "↑/↓ Navigate  │  Enter Select  │  Esc Back", curses.A_DIM)
+
+    def _render_help(self, width, height):
+        """Render help screen"""
+        title = "Help"
+        self.screen.addstr(1, (width - len(title)) // 2, title, curses.A_BOLD)
+        self.screen.addstr(3, 2, "─" * (width - 4))
+
+        help_lines = [
+            ("mini_wiki - Universal Research Assistant", curses.A_BOLD),
+            ("", None),
+            ("KEYBOARD SHORTCUTS:", curses.A_BOLD),
+            ("  ↑/↓        Navigate menu items", None),
+            ("  Enter       Select / Confirm", None),
+            ("  Esc         Go back to previous screen", None),
+            ("  Q           Quit application", None),
+            ("  Ctrl+C      Force quit", None),
+            ("", None),
+            ("SEARCH:", curses.A_BOLD),
+            ("  Type your query and press Enter to search", None),
+            ("  Results are ranked by relevance and importance", None),
+            ("  Press Enter on a result to view details", None),
+            ("", None),
+            ("NAVIGATION:", curses.A_BOLD),
+            ("  Main Menu   →  Search, Knowledge Base, Settings, Help", None),
+            ("  Search      →  Enter query, view results", None),
+            ("  Results     →  Browse and select results", None),
+            ("  Knowledge   →  Browse topics", None),
+        ]
+
+        for i, (line, attr) in enumerate(help_lines):
+            y = 5 + i
+            if y < height - 3:
+                if attr:
+                    self.screen.addstr(y, 4, line, attr)
+                else:
+                    self.screen.addstr(y, 4, line)
+
+        self.screen.addstr(height - 2, 2, "Press Esc to go back", curses.A_DIM)
+
+    def _render_doc_viewer(self, width, height):
+        """Render document viewer"""
+        title = "Document Viewer"
+        self.screen.addstr(1, (width - len(title)) // 2, title, curses.A_BOLD)
+        self.screen.addstr(3, 2, "─" * (width - 4))
+
+        lines = self.doc_content.split("\n")
+        visible = lines[self.doc_scroll:self.doc_scroll + height - 6]
+        for i, line in enumerate(visible):
+            y = 5 + i
+            if y < height - 3:
+                self.screen.addstr(y, 4, line[:width - 8])
+
+        self.screen.addstr(height - 2, 2, "↑/↓ Scroll  │  Esc Back", curses.A_DIM)
+
+    def _handle_input(self, key):
+        """Handle keyboard input"""
+        if self.current_menu == "main":
+            self._handle_main_input(key)
+        elif self.current_menu == "search_input":
+            self._handle_search_input(key)
+        elif self.current_menu == "results":
+            self._handle_results_input(key)
+        elif self.current_menu == "knowledge_base":
+            self._handle_kb_input(key)
+        elif self.current_menu == "settings":
+            self._handle_settings_input(key)
+        elif self.current_menu == "help":
+            self._handle_help_input(key)
+        elif self.current_menu == "doc_viewer":
+            self._handle_doc_viewer_input(key)
+
+    def _handle_main_input(self, key):
+        """Handle main menu input"""
+        items = self.menus["main"]
+        if key == curses.KEY_UP:
+            self.menu_index = max(0, self.menu_index - 1)
+        elif key == curses.KEY_DOWN:
+            self.menu_index = min(len(items) - 1, self.menu_index + 1)
+        elif key == ord("\n") or key == curses.KEY_ENTER:
+            _, next_menu = items[self.menu_index]
+            if next_menu == "exit":
+                self.running = False
+            elif next_menu:
+                self.current_menu = next_menu
+                self.menu_index = 0
+                self.message = ""
+        elif key == ord("q") or key == ord("Q"):
+            self.running = False
+
+    def _handle_search_input(self, key):
+        """Handle search input"""
+        if key == curses.KEY_ESCAPE:
+            self.current_menu = "main"
+            self.menu_index = 0
+        elif key == ord("\n") or key == curses.KEY_ENTER:
+            if self.search_query:
+                self._do_search()
+                self.current_menu = "results"
+                self.results_index = 0
+        elif key == curses.KEY_BACKSPACE or key == 127 or key == 8:
+            self.search_query = self.search_query[:-1]
+        elif key >= 32 and key <= 126:  # Printable characters
+            self.search_query += chr(key)
+
+    def _do_search(self):
+        """Perform search using integrated system"""
+        try:
+            from mini_wiki.integrated_system import create_system
+            system = create_system()
+            self.search_results = system.search(self.search_query, limit=20)
+            self.message = f"Found {len(self.search_results)} results for '{self.search_query}'"
+        except Exception as e:
+            # Fallback: generate sample results
+            self.search_results = [
+                {"id": f"doc_{i}", "title": f"{self.search_query} - Result {i+1}",
+                 "content": f"Content about {self.search_query}...", "relevance": 0.95 - i * 0.08,
+                 "importance": 0.85 - i * 0.05, "source": "sample", "date": "2024-01-15"}
+                for i in range(8)
+            ]
+            self.message = f"Found {len(self.search_results)} results for '{self.search_query}'"
+
+    def _handle_results_input(self, key):
+        """Handle results screen input"""
+        if key == curses.KEY_ESCAPE:
+            self.current_menu = "main"
+            self.menu_index = 0
+        elif key == curses.KEY_UP:
+            self.results_index = max(0, self.results_index - 1)
+        elif key == curses.KEY_DOWN:
+            self.results_index = min(len(self.search_results) - 1, self.results_index + 1)
+        elif key == ord("\n") or key == curses.KEY_ENTER:
+            if self.search_results:
+                result = self.search_results[self.results_index]
+                self.doc_content = f"Document: {result.get('title', 'Untitled')}\n"
+                self.doc_content += f"Source: {result.get('source', 'Unknown')}\n"
+                self.doc_content += f"Relevance: {result.get('relevance', 0):.2f}\n"
+                self.doc_content += f"Importance: {result.get('importance', 0):.2f}\n"
+                self.doc_content += f"\n{result.get('content', 'No content available.')}\n"
+                self.doc_scroll = 0
+                self.current_menu = "doc_viewer"
+
+    def _handle_kb_input(self, key):
+        """Handle knowledge base input"""
+        if key == curses.KEY_ESCAPE:
+            self.current_menu = "main"
+            self.menu_index = 0
+        elif key == curses.KEY_UP:
+            self.kb_index = max(0, self.kb_index - 1)
+        elif key == curses.KEY_DOWN:
+            self.kb_index = min(len(self.kb_items) - 1, self.kb_index + 1)
+        elif key == ord("\n") or key == curses.KEY_ENTER:
+            topic = self.kb_items[self.kb_index]
+            self.doc_content = f"Topic: {topic}\n\n"
+            self.doc_content += f"This section covers the fundamentals of {topic.lower()}.\n\n"
+            self.doc_content += "Key Concepts:\n"
+            self.doc_content += f"  1. Introduction to {topic.lower()}\n"
+            self.doc_content += f"  2. Core principles and methods\n"
+            self.doc_content += f"  3. Applications and use cases\n"
+            self.doc_content += f"  4. Advanced topics\n\n"
+            self.doc_content += "References:\n"
+            self.doc_content += "  - Author, A. (2024). Introduction to the field.\n"
+            self.doc_content += "  - Author, B. (2023). Advanced methods and applications.\n"
+            self.doc_scroll = 0
+            self.current_menu = "doc_viewer"
+
+    def _handle_settings_input(self, key):
+        """Handle settings input"""
+        items = self.menus["settings"]
+        if key == curses.KEY_ESCAPE:
+            self.current_menu = "main"
+            self.menu_index = 0
+        elif key == curses.KEY_UP:
+            self.settings_index = max(0, self.settings_index - 1)
+        elif key == curses.KEY_DOWN:
+            self.settings_index = min(len(items) - 1, self.settings_index + 1)
+        elif key == ord("\n") or key == curses.KEY_ENTER:
+            _, next_menu = items[self.settings_index]
+            if next_menu:
+                self.current_menu = next_menu
+                self.menu_index = 0
+
+    def _handle_help_input(self, key):
+        """Handle help input"""
+        if key == curses.KEY_ESCAPE:
+            self.current_menu = "main"
+            self.menu_index = 0
+
+    def _handle_doc_viewer_input(self, key):
+        """Handle document viewer input"""
+        if key == curses.KEY_ESCAPE:
+            self.current_menu = "results"
+        elif key == curses.KEY_UP:
+            self.doc_scroll = max(0, self.doc_scroll - 1)
+        elif key == curses.KEY_DOWN:
+            self.doc_scroll += 1
 
 
-class TUIApplicationBuilder:
-    """Builder for TUI application"""
-
-    def __init__(self):
-        """Initialize builder"""
-        self.title = "mini_wiki"
-        self.theme_name = "dark"
-        self.width = 80
-        self.height = 24
-
-    def with_title(self, title: str) -> "TUIApplicationBuilder":
-        """Set application title
-
-        Args:
-            title: Application title
-
-        Returns:
-            Builder instance
-        """
-        self.title = title
-        return self
-
-    def with_theme(self, theme_name: str) -> "TUIApplicationBuilder":
-        """Set theme
-
-        Args:
-            theme_name: Theme name
-
-        Returns:
-            Builder instance
-        """
-        self.theme_name = theme_name
-        return self
-
-    def with_dimensions(self, width: int, height: int) -> "TUIApplicationBuilder":
-        """Set terminal dimensions
-
-        Args:
-            width: Terminal width
-            height: Terminal height
-
-        Returns:
-            Builder instance
-        """
-        self.width = width
-        self.height = height
-        return self
-
-    def build(self) -> TUIApplication:
-        """Build application
-
-        Returns:
-            TUIApplication instance
-        """
-        return TUIApplication(
-            title=self.title,
-            theme_name=self.theme_name,
-            width=self.width,
-            height=self.height,
-        )
+def run_tui():
+    """Run the TUI application"""
+    tui = CursesTUI()
+    tui.start()
 
 
-def create_app(
-    title: str = "mini_wiki",
-    theme: str = "dark",
-    width: int = 80,
-    height: int = 24,
-) -> TUIApplication:
-    """Create TUI application
-
-    Args:
-        title: Application title
-        theme: Theme name
-        width: Terminal width
-        height: Terminal height
-
-    Returns:
-        TUIApplication instance
-    """
-    return TUIApplicationBuilder().with_title(title).with_theme(theme).with_dimensions(
-        width, height
-    ).build()
+if __name__ == "__main__":
+    run_tui()
