@@ -2284,3 +2284,560 @@ OUTPUT_DIR=./outputs
 **Document Version**: 1.0  
 **Last Updated**: April 29, 2026  
 **Next Review**: After Phase 4 completion
+
+---
+
+---
+
+## Mini_Wiki: Evolution of SRE-RAG
+
+### Vision & Purpose
+
+**mini_wiki** is the next evolution of the SRE-RAG tool, transforming it from a Glassdoor-specific requirements engineering tool into a **universal research assistant** that can:
+
+1. **Learn & Understand** any dataset you provide
+2. **Teach the AI Model** about your data through intelligent indexing
+3. **Perform Analysis Tasks** (filtering, ranking, extraction, summarization)
+4. **Rank Content** by relevance to your research topic
+5. **Converse Intelligently** about your dataset
+
+### Core Concept
+
+```
+User Dataset/Source
+        ↓
+    [mini_wiki]
+        ↓
+    ┌─────────────────────────────────┐
+    │ 1. Ingest & Learn Dataset       │
+    │ 2. Build Vector Index (FAISS)   │
+    │ 3. Teach AI Model               │
+    │ 4. Filter Content               │
+    │ 5. Rank by Relevance            │
+    │ 6. Document for Reference       │
+    └─────────────────────────────────┘
+        ↓
+    Intelligent Analysis & Conversation
+```
+
+### Use Cases
+
+**Research & Analysis**
+- Analyze research papers, datasets, or articles
+- Extract key findings and rank by relevance
+- Get AI-powered insights about your data
+
+**Data Exploration**
+- Upload CSV, PDF, or web content
+- Ask questions about the data
+- Get ranked, relevant answers
+
+**Knowledge Management**
+- Build a searchable knowledge base from your documents
+- Teach the AI about your domain
+- Reference specific sources in conversations
+
+**Content Curation**
+- Filter large datasets by relevance
+- Rank content by importance to your topic
+- Export curated, ranked results
+
+### Key Features
+
+#### 1. Multi-Format Input Support
+- **CSV/Tabular Data**: Direct import with column mapping
+- **URLs/Web Content**: Fetch and parse web pages
+- **PDF Documents**: Extract text and metadata
+- **Text Files**: Plain text, markdown, etc.
+- **Automatic Format Detection**: Detect format and process accordingly
+
+#### 2. Intelligent Learning System
+- **Vector Embeddings**: Convert all content to semantic vectors
+- **FAISS Indexing**: Fast similarity search across entire dataset
+- **Metadata Preservation**: Keep source, date, author information
+- **Incremental Learning**: Add new data without re-indexing everything
+
+#### 3. Hybrid Ranking System
+The tool ranks content using **two dimensions**:
+
+**A. Relevance Ranking** (Semantic Similarity)
+- How similar is the content to the user's query/topic?
+- Uses TF-IDF + cosine similarity
+- Scores 0.0 (irrelevant) to 1.0 (highly relevant)
+
+**B. Importance Ranking** (Statistical Significance)
+- How important is this content in the dataset?
+- Measures: frequency, citation count, length, recency
+- Scores 0.0 (low importance) to 1.0 (high importance)
+
+**C. Hybrid Score** (Combined)
+```
+Final Score = (0.6 × Relevance) + (0.4 × Importance)
+```
+
+**Example**:
+```
+Content A: Relevance=0.9, Importance=0.5 → Score=0.78
+Content B: Relevance=0.7, Importance=0.9 → Score=0.78
+Content C: Relevance=0.95, Importance=0.8 → Score=0.89 ← Top ranked
+```
+
+#### 4. AI Model Teaching System
+The tool documents the dataset for the AI model:
+
+**Documentation Includes**:
+- Dataset overview (size, format, date range)
+- Content summary (key topics, themes)
+- Ranking methodology (how content is scored)
+- Source attribution (where each piece comes from)
+- Quality metrics (completeness, relevance, importance)
+
+**AI Reference Format**:
+```
+[DATASET CONTEXT]
+Name: User's Research Dataset
+Size: 1,000 documents
+Format: CSV + PDF + Web content
+Date Range: 2020-2026
+
+[CONTENT SUMMARY]
+Key Topics: Machine Learning, Data Science, AI Ethics
+Total Unique Concepts: 245
+Average Relevance Score: 0.72
+
+[RANKING METHODOLOGY]
+- Relevance: Semantic similarity to user's topic (60% weight)
+- Importance: Statistical significance in dataset (40% weight)
+- Combined Score: Weighted average of both
+
+[TOP RANKED CONTENT]
+1. "Deep Learning Fundamentals" (Score: 0.95)
+   Source: research_papers.pdf
+   Relevance: 0.98 | Importance: 0.91
+   
+2. "Data Ethics Framework" (Score: 0.89)
+   Source: articles.csv
+   Relevance: 0.85 | Importance: 0.94
+
+[QUALITY METRICS]
+- Completeness: 94%
+- Average Relevance: 0.72
+- Coverage: 89% of user's topic
+```
+
+#### 5. TUI Interface
+A custom Terminal User Interface (inspired by opencode's TUI) with:
+
+**Main Menu**:
+```
+┌─────────────────────────────────┐
+│      mini_wiki v1.0             │
+├─────────────────────────────────┤
+│ 1. Load Dataset                 │
+│ 2. Set Research Topic           │
+│ 3. Filter & Rank Content        │
+│ 4. View Ranked Results          │
+│ 5. Ask Questions                │
+│ 6. Export Results               │
+│ 7. Settings                     │
+│ 8. Exit                         │
+└─────────────────────────────────┘
+```
+
+**Features**:
+- Interactive dataset loading
+- Topic/query input with auto-suggestions
+- Real-time ranking visualization
+- Scrollable results with scores
+- Export to CSV, JSON, PDF
+- Settings for ranking weights, filters, etc.
+
+### Architecture
+
+```
+mini_wiki/
+├── core/
+│   ├── dataset_loader.py          # Load CSV, PDF, URLs, text
+│   ├── embedder.py                # Convert content to vectors
+│   ├── indexer.py                 # Build FAISS index
+│   ├── ranker.py                  # Hybrid ranking system
+│   └── ai_teacher.py              # Generate AI reference docs
+│
+├── ui/
+│   ├── tui.py                     # Terminal User Interface
+│   ├── menu.py                    # Menu system
+│   ├── widgets.py                 # UI components
+│   └── themes.py                  # Color schemes
+│
+├── analysis/
+│   ├── filter_engine.py           # Content filtering
+│   ├── extractor.py               # Extract key info
+│   ├── summarizer.py              # Summarize content
+│   └── analyzer.py                # Statistical analysis
+│
+├── export/
+│   ├── csv_exporter.py            # Export to CSV
+│   ├── json_exporter.py           # Export to JSON
+│   ├── pdf_exporter.py            # Export to PDF
+│   └── markdown_exporter.py       # Export to Markdown
+│
+├── config/
+│   ├── settings.yaml              # Default settings
+│   └── themes.yaml                # UI themes
+│
+└── main.py                        # Entry point
+```
+
+### Data Flow
+
+```
+1. USER INPUT
+   ├─ Dataset (CSV, PDF, URL, text)
+   └─ Research Topic/Query
+
+2. INGESTION
+   ├─ Load & parse dataset
+   ├─ Extract text content
+   ├─ Preserve metadata
+   └─ Validate quality
+
+3. LEARNING
+   ├─ Generate embeddings
+   ├─ Build FAISS index
+   ├─ Calculate importance scores
+   └─ Create dataset summary
+
+4. RANKING
+   ├─ Calculate relevance scores
+   ├─ Calculate importance scores
+   ├─ Combine into hybrid scores
+   └─ Sort by final score
+
+5. DOCUMENTATION
+   ├─ Generate dataset context
+   ├─ Document ranking methodology
+   ├─ Create AI reference guide
+   └─ Include quality metrics
+
+6. OUTPUT
+   ├─ Display ranked results in TUI
+   ├─ Allow filtering & exploration
+   ├─ Export in multiple formats
+   └─ Provide AI model context
+```
+
+### Ranking System Details
+
+#### Relevance Scoring (Semantic Similarity)
+
+```python
+# TF-IDF + Cosine Similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Vectorize dataset content
+vectorizer = TfidfVectorizer(max_features=1000)
+vectors = vectorizer.fit_transform(dataset_texts)
+
+# Calculate similarity to user's query
+query_vector = vectorizer.transform([user_query])
+relevance_scores = cosine_similarity(query_vector, vectors)[0]
+
+# Normalize to 0-1 range
+relevance_scores = (relevance_scores - min) / (max - min)
+```
+
+**Relevance Score Interpretation**:
+- 0.9-1.0: Highly relevant, directly addresses topic
+- 0.7-0.9: Relevant, related to topic
+- 0.5-0.7: Somewhat relevant, tangentially related
+- 0.3-0.5: Weakly relevant, mentions topic
+- 0.0-0.3: Irrelevant, unrelated to topic
+
+#### Importance Scoring (Statistical Significance)
+
+```python
+# Multi-factor importance calculation
+def calculate_importance(content_item):
+    factors = {
+        'frequency': calculate_frequency(content_item),      # 0-1
+        'length': calculate_length_score(content_item),      # 0-1
+        'recency': calculate_recency_score(content_item),    # 0-1
+        'citations': calculate_citation_count(content_item), # 0-1
+    }
+    
+    # Weighted average
+    weights = {
+        'frequency': 0.3,
+        'length': 0.2,
+        'recency': 0.3,
+        'citations': 0.2,
+    }
+    
+    importance = sum(factors[k] * weights[k] for k in factors)
+    return importance  # 0-1
+```
+
+**Importance Score Interpretation**:
+- 0.9-1.0: Highly important, frequently cited/referenced
+- 0.7-0.9: Important, significant in dataset
+- 0.5-0.7: Moderately important, notable content
+- 0.3-0.5: Less important, supplementary content
+- 0.0-0.3: Minimal importance, marginal content
+
+#### Hybrid Ranking Formula
+
+```python
+def calculate_final_score(relevance, importance, weights=(0.6, 0.4)):
+    """
+    Combine relevance and importance into final ranking score.
+    
+    Args:
+        relevance: Semantic similarity score (0-1)
+        importance: Statistical significance score (0-1)
+        weights: Tuple of (relevance_weight, importance_weight)
+                 Default: (0.6, 0.4) - prioritize relevance
+    
+    Returns:
+        final_score: Combined score (0-1)
+    """
+    relevance_weight, importance_weight = weights
+    final_score = (relevance * relevance_weight) + (importance * importance_weight)
+    return final_score
+```
+
+**Customizable Weights**:
+- **Research-focused**: (0.7, 0.3) - prioritize relevance
+- **Balanced**: (0.6, 0.4) - equal emphasis
+- **Importance-focused**: (0.4, 0.6) - prioritize importance
+- **Custom**: User-defined weights
+
+### AI Model Reference Documentation
+
+The tool generates comprehensive documentation for the AI model:
+
+#### 1. Dataset Context
+```yaml
+dataset:
+  name: "User's Research Dataset"
+  description: "Collection of research papers and articles"
+  size: 1000 documents
+  format: "CSV + PDF + Web content"
+  date_range: "2020-2026"
+  language: "English"
+  domain: "Machine Learning & AI"
+```
+
+#### 2. Content Summary
+```yaml
+content:
+  total_documents: 1000
+  total_words: 2500000
+  avg_document_length: 2500 words
+  unique_concepts: 245
+  key_topics:
+    - "Machine Learning"
+    - "Deep Learning"
+    - "Data Science"
+    - "AI Ethics"
+  coverage: "89% of user's research topic"
+```
+
+#### 3. Ranking Methodology
+```yaml
+ranking:
+  method: "Hybrid (Relevance + Importance)"
+  relevance:
+    algorithm: "TF-IDF + Cosine Similarity"
+    weight: 0.6
+    interpretation: "Semantic similarity to user's topic"
+  importance:
+    algorithm: "Multi-factor (frequency, length, recency, citations)"
+    weight: 0.4
+    interpretation: "Statistical significance in dataset"
+  formula: "final_score = (0.6 × relevance) + (0.4 × importance)"
+```
+
+#### 4. Quality Metrics
+```yaml
+quality:
+  completeness: 0.94
+  average_relevance: 0.72
+  average_importance: 0.68
+  coverage: 0.89
+  data_quality: "High"
+  missing_values: "6%"
+```
+
+#### 5. Top Ranked Content
+```yaml
+top_content:
+  - rank: 1
+    title: "Deep Learning Fundamentals"
+    source: "research_papers.pdf"
+    relevance_score: 0.98
+    importance_score: 0.91
+    final_score: 0.95
+    summary: "Comprehensive overview of deep learning concepts..."
+    
+  - rank: 2
+    title: "Data Ethics Framework"
+    source: "articles.csv"
+    relevance_score: 0.85
+    importance_score: 0.94
+    final_score: 0.89
+    summary: "Framework for ethical AI development..."
+```
+
+### Implementation Phases
+
+#### Phase 1: Core Learning System (Weeks 1-2)
+- Dataset loader (CSV, PDF, text, URLs)
+- Embedding generation (sentence-transformers)
+- FAISS indexing
+- Basic ranking (relevance only)
+
+#### Phase 2: Hybrid Ranking (Weeks 3-4)
+- Importance scoring system
+- Hybrid ranking formula
+- Ranking customization
+- Score visualization
+
+#### Phase 3: AI Teaching System (Weeks 5-6)
+- Dataset context generation
+- Ranking methodology documentation
+- AI reference guide creation
+- Quality metrics calculation
+
+#### Phase 4: TUI Interface (Weeks 7-8)
+- Menu system
+- Interactive dataset loading
+- Results visualization
+- Export functionality
+
+#### Phase 5: Advanced Features (Weeks 9-10)
+- Filtering engine
+- Content extraction
+- Summarization
+- Statistical analysis
+
+#### Phase 6: Deployment & Polish (Weeks 11-12)
+- Integration with opencode TUI
+- Performance optimization
+- Testing & QA
+- Documentation
+
+### Configuration
+
+**mini_wiki_config.yaml**:
+```yaml
+mini_wiki:
+  name: "mini_wiki"
+  version: "1.0"
+  description: "Universal research assistant with AI learning"
+  
+  input:
+    formats: ["csv", "pdf", "txt", "url"]
+    max_file_size: "500MB"
+    auto_detect_format: true
+  
+  learning:
+    embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_device: "cuda"
+    batch_size: 256
+    index_type: "faiss_flat"
+  
+  ranking:
+    method: "hybrid"
+    relevance_weight: 0.6
+    importance_weight: 0.4
+    importance_factors:
+      frequency: 0.3
+      length: 0.2
+      recency: 0.3
+      citations: 0.2
+  
+  ai_teaching:
+    generate_context: true
+    include_methodology: true
+    include_quality_metrics: true
+    include_top_content: true
+  
+  ui:
+    theme: "dark"
+    show_scores: true
+    results_per_page: 10
+    enable_export: true
+  
+  export:
+    formats: ["csv", "json", "pdf", "markdown"]
+    include_scores: true
+    include_metadata: true
+```
+
+### Benefits Over Current SRE-RAG
+
+| Feature | SRE-RAG | mini_wiki |
+|---------|---------|-----------|
+| **Purpose** | Requirements engineering | Universal research assistant |
+| **Input Formats** | CSV only | CSV, PDF, URLs, text |
+| **Ranking** | Relevance only | Hybrid (relevance + importance) |
+| **AI Teaching** | Implicit | Explicit documentation |
+| **Customization** | Domain-specific | Fully customizable |
+| **Interface** | CLI only | TUI + CLI |
+| **Portability** | Directory-specific | System-wide (opencode TUI) |
+| **Use Cases** | Glassdoor reviews | Any research/data analysis |
+
+### Example Workflow
+
+```
+1. USER: "Load my research papers"
+   mini_wiki: "Loaded 150 PDF files (45MB)"
+
+2. USER: "My research topic is 'Machine Learning Ethics'"
+   mini_wiki: "Analyzing dataset for relevance to your topic..."
+   mini_wiki: "Found 89 highly relevant documents"
+
+3. USER: "Show me the top 10 most relevant papers"
+   mini_wiki: [Displays ranked list with scores]
+   
+   Rank | Title | Relevance | Importance | Final Score
+   ─────┼───────┼───────────┼────────────┼─────────────
+   1    | "AI Ethics Framework" | 0.98 | 0.91 | 0.95
+   2    | "Bias in ML Systems" | 0.95 | 0.88 | 0.92
+   3    | "Fairness Metrics" | 0.92 | 0.85 | 0.89
+   ...
+
+4. USER: "Export these with their ranking scores"
+   mini_wiki: "Exported to ranked_papers.csv"
+
+5. USER: "Generate AI reference documentation"
+   mini_wiki: "Created ai_reference.yaml with dataset context"
+   mini_wiki: "AI model can now reference this dataset intelligently"
+```
+
+### Next Steps
+
+1. **Clarify Requirements** ✅ (Done - you've provided vision)
+2. **Design Architecture** → Start Phase 1
+3. **Implement Core Learning** → Phase 1
+4. **Add Hybrid Ranking** → Phase 2
+5. **Create AI Teaching System** → Phase 3
+6. **Build TUI Interface** → Phase 4
+7. **Add Advanced Features** → Phase 5
+8. **Deploy & Polish** → Phase 6
+
+---
+
+# My original notes:
+
+My use case that made me think about such tool is that I want a tool to take the dataset or source I give it, analizes it, learns it, and perform some tasks I request it to do.
+Why? because I'm conducting research continuiousely nowadays, and I want help with it.
+
+The tool should accept links and datasets (csv files or any other tabular format), reads the content, learns it, then get ready to converse with the user about what they gave it.
+
+I want the tool to be usable everywhere, without having to go to this exact directory to run it. Which in this case it can be added to the opencode's TUI tools that I may use from time to time.
+
+The tool name is "mini_wiki".
+
+---
